@@ -302,9 +302,11 @@ class MDPVehicle(ControlledVehicle):
         :param action: a high-level action
         """
         if action == "FASTER":
-            self.speed_index = min(self.speed_index + 1, self.target_speeds.size - 1)
+            # self.speed_index = min(self.speed_index + 1, self.target_speeds.size - 1)
+            self.speed_index = self.speed_to_index(self.speed) + 1
         elif action == "SLOWER":
-            self.speed_index = max(self.speed_index - 1, 0)
+            # self.speed_index = max(self.speed_index - 1, 0)
+            self.speed_index = self.speed_to_index(self.speed) - 1
         else:
             super().act(action)
             return
@@ -327,21 +329,13 @@ class MDPVehicle(ControlledVehicle):
         """
         Find the index of the closest speed allowed to a given speed.
 
-        Assumes a uniform list of target speeds to avoid searching for the closest target speed
+        Loops over the list of allowed speeds to find the closest one, to allow for non-uniform lists of allowed speeds.
 
         :param speed: an input speed [m/s]
         :return: the index of the closest speed allowed []
         """
-        x = (speed - self.target_speeds[0]) / (
-            self.target_speeds[-1] - self.target_speeds[0]
-        )
-        return np.int64(
-            np.clip(
-                np.round(x * (self.target_speeds.size - 1)),
-                0,
-                self.target_speeds.size - 1,
-            )
-        )
+        index = np.argmin(np.abs(self.target_speeds - speed))
+        return int(index)
 
     @classmethod
     def speed_to_index_default(cls, speed: float) -> int:
