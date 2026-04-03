@@ -291,6 +291,20 @@ class MDPVehicle(ControlledVehicle):
         )
         self.speed_index = self.speed_to_index(self.target_speed)
         self.target_speed = self.index_to_speed(self.speed_index)
+        self.lock_controls = False
+
+    def emergency_brake(self) -> None:
+        """
+        Perform an emergency brake, by setting the target speed to 0.
+        Lock the controls to prevent the next call to 'act' from overriding the emergency brake.
+        """
+        self.target_speed = 0
+        self.speed_index = self.speed_to_index(self.target_speed)
+        self.lock_controls = True
+
+    def unlock_controls(self) -> None:
+        """Unlock the controls after an emergency brake."""
+        self.lock_controls = False
 
     def act(self, action: Union[dict, str] = None) -> None:
         """
