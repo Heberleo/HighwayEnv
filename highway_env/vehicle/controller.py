@@ -315,6 +315,10 @@ class MDPVehicle(ControlledVehicle):
 
         :param action: a high-level action
         """
+        if self.lock_controls:
+            super().act()
+            return
+
         if action == "FASTER":
             # self.speed_index = min(self.speed_index + 1, self.target_speeds.size - 1)
             self.speed_index = self.speed_to_index(self.speed) + 1
