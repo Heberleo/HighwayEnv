@@ -1,4 +1,5 @@
 from __future__ import annotations
+from turtle import speed
 
 import numpy as np
 
@@ -59,7 +60,7 @@ class HighwayEnv(AbstractEnv):
         """Create a road composed of straight adjacent lanes."""
         self.road = Road(
             network=RoadNetwork.straight_road_network(
-                self.config["lanes_count"], speed_limit=30
+                self.config["lanes_count"], speed_limit=self.config.get("speed_limit", 30)
             ),
             np_random=self.np_random,
             record_history=self.config["show_trajectories"],
@@ -86,12 +87,44 @@ class HighwayEnv(AbstractEnv):
             self.controlled_vehicles.append(vehicle)
             self.road.vehicles.append(vehicle)
 
-            for _ in range(others):
+            speed_range = self.config.get("other_speed_range", [20, 30])
+            for _ in range(others):      
+                speed = self.np_random.uniform(*speed_range)
+
                 vehicle = other_vehicles_type.create_random(
-                    self.road, spacing=1 / self.config["vehicles_density"]
+                    self.road, 
+                    spacing=1 / self.config["vehicles_density"],
+                    speed=speed
                 )
                 vehicle.randomize_behavior()
                 self.road.vehicles.append(vehicle)
+
+    def set_scenario(self, scenario_type: str) -> None:
+        """
+        Updates environment parameters for a specific traffic scenario.
+        Note: Call this before .reset() for a clean transition.
+        """
+        if scenario_type == "fast_sparse":
+            self.config.update({
+                "vehicles_count": 10,
+                "vehicles_density": 1.0,
+                "ego_initial_speed": 20.0,
+                "other_speed_range": [21, 24],
+                "initial_spacing": 1.0,
+                "speed_limit": 30
+            })
+            
+        elif scenario_type == "slow_dense":
+            self.config.update({
+                "vehicles_count": 30,
+                "vehicles_density": 1.5,
+                "initial_spacing": 1.0,
+                "ego_initial_speed": 10.0,
+                "other_speed_range": [8, 11],
+                "speed_limit": 15
+            })
+        
+        print(f"Scenario switched to: {scenario_type}")
 
     def _reward(self, action: Action) -> float:
         """
