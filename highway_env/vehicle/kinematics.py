@@ -102,6 +102,47 @@ class Vehicle(RoadObject):
         x0 += offset * road.np_random.uniform(0.9, 1.1)
         v = cls(road, lane.position(x0, 0), lane.heading_at(x0), speed)
         return v
+    
+    @classmethod
+    def create_at(
+        cls,
+        road: Road,
+        lane_id: int,
+        x: float,
+        speed: float = None,
+        lane_from: str | None = None,
+        lane_to: str | None = None,
+    ) -> Vehicle:
+        """
+        Create a vehicle at a specific lane and longitudinal position.
+
+        :param road: the road where the vehicle is driving
+        :param lane_id: the index of the lane (0 is usually leftmost)
+        :param x: the longitudinal position [m] along the lane
+        :param speed: initial speed [m/s]. Defaults to lane speed limit or class default.
+        :param lane_from: start node of the road network (optional for simple roads)
+        :param lane_to: end node of the road network (optional for simple roads)
+        """
+        # 1. Resolve the network nodes if not provided
+        _from = lane_from or list(road.network.graph.keys())[0]
+        _to = lane_to or list(road.network.graph[_from].keys())[0]
+        
+        # 2. Get the lane object
+        lane = road.network.get_lane((_from, _to, lane_id))
+        
+        # 3. Determine speed
+        if speed is None:
+            speed = lane.speed_limit if lane.speed_limit is not None else 20.0
+            
+        # 4. Create the vehicle instance
+        # position(x, lateral) -> lateral is 0 for center of lane
+        v = cls(
+            road, 
+            lane.position(x, 0), 
+            lane.heading_at(x), 
+            speed
+        )
+        return v
 
     @classmethod
     def create_from(cls, vehicle: Vehicle) -> Vehicle:
