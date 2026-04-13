@@ -201,7 +201,14 @@ class HighwayEnv(AbstractEnv):
                 if abs(lane_positions[i] - lane_positions[i-1]) < BASE_DISTANCE:
                     # If two vehicles are too close, remove the second one by setting its position to 0 (which will be ignored when spawning)
                     lane_positions[i] = 0
+
+                if lane_id == ego_lane and abs(lane_positions[i] - ego_x) < BASE_DISTANCE * self.config.get("ego_spacing", 1.0):
+                    # If any vehicle is too close to the ego, remove it
+                    lane_positions[i] = 0
+                
             x_positions[lane_id, :] = lane_positions
+
+
 
         for lane_id in range(num_lanes):
             for row in range(rows):
@@ -237,13 +244,13 @@ class HighwayEnv(AbstractEnv):
         """
         if scenario_type == "fast_sparse":
             self.config.update({
-                "vehicles_count": 20,
+                "vehicles_count": 30,
                 "vehicles_density": 0.4,
                 "ego_initial_speed": 20.0,
                 "other_speed_range": [18, 24],
                 "ego_spacing": 1.5,
                 "speed_limit": 30,
-                "front_to_behind_ratio": 4,
+                "front_to_behind_ratio": 2,
                 "spawn_mode": "grid"
             })
             

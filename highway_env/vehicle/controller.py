@@ -302,6 +302,17 @@ class MDPVehicle(ControlledVehicle):
         self.speed_index = self.speed_to_index(self.target_speed)
         self.lock_controls = True
 
+    def set_target_speed(self, target_speed: float) -> None:
+        """
+        Set the target speed of the vehicle to a given value, and update the corresponding speed index.
+        Lock the controls to prevent the next call to 'act' from overriding the target speed.
+        
+        :param target_speed: the new target speed [m/s]
+        """
+        self.target_speed = target_speed
+        self.speed_index = self.speed_to_index(self.target_speed)
+        self.lock_controls = True
+
     def unlock_controls(self) -> None:
         """Unlock the controls after an emergency brake."""
         self.lock_controls = False
