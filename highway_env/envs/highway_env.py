@@ -74,7 +74,6 @@ class HighwayEnv(AbstractEnv):
 
         self.time += 1 / self.config["policy_frequency"]
         self._simulate(action)
-        self._refresh_traffic_around_controlled()
 
         obs = self.observation_type.observe()
         reward = self._reward(action)
