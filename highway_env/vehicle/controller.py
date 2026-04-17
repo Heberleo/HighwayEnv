@@ -292,6 +292,7 @@ class MDPVehicle(ControlledVehicle):
         self.speed_index = self.speed_to_index(self.target_speed)
         self.target_speed = self.index_to_speed(self.speed_index)
         self.lock_controls = False
+        self.last_target_lane_index = self.target_lane_index
 
     def emergency_brake(self) -> None:
         """
@@ -300,6 +301,8 @@ class MDPVehicle(ControlledVehicle):
         """
         self.target_speed = 0
         self.speed_index = self.speed_to_index(self.target_speed)
+
+        self.target_lane_index = self.last_target_lane_index # TODO experimental
         self.lock_controls = True
 
     def set_target_speed(self, target_speed: float) -> None:
@@ -326,7 +329,12 @@ class MDPVehicle(ControlledVehicle):
 
         :param action: a high-level action
         """
-        if self.lock_controls:
+
+        self.last_target_lane_index = self.target_lane_index
+
+        if action == "BRAKE":
+            self.target_speed = 0
+            self.speed_index = self.speed_to_index(self.target_speed)
             super().act()
             return
 
@@ -339,6 +347,7 @@ class MDPVehicle(ControlledVehicle):
         else:
             super().act(action)
             return
+        
         self.speed_index = int(
             np.clip(self.speed_index, 0, self.target_speeds.size - 1)
         )

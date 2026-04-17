@@ -59,6 +59,13 @@ class HighwayEnv(AbstractEnv):
         else:
             self._create_vehicles()  # Original method to create vehicles randomly on the road
 
+        lateral_wind = self.config.get("lateral_wind", 0)
+        longitudinal_wind = self.config.get("longitudinal_wind", 0)
+
+        for vehicle in self.controlled_vehicles:
+            if isinstance(vehicle, ControlledVehicle):
+                vehicle.set_action_offsets(longitudinal_wind, lateral_wind)
+
     def step(self, action: Action) -> tuple[np.ndarray, float, bool, bool, dict]:
         """
         Perform an action, advance the simulation, and keep surrounding traffic populated.
@@ -176,7 +183,6 @@ class HighwayEnv(AbstractEnv):
         # 3. Spawn the Grid
         for lane_id in range(num_lanes):
             for row in range(-rows_behind, rows_ahead):
-                print(f"Attempting to spawn vehicle in lane {lane_id}, row {row} (relative to ego)")
                 # Don't spawn on the ego vehicle's exact spot
                 if lane_id == ego_lane and row == 0:
                     continue
@@ -263,37 +269,6 @@ class HighwayEnv(AbstractEnv):
                 vehicle.randomize_behavior()
                 self.road.vehicles.append(vehicle)
         
-    def set_scenario(self, scenario_type: str) -> None:
-        """
-        Updates environment parameters for a specific traffic scenario.
-        Note: Call this before .reset() for a clean transition.
-        """
-        if scenario_type == "fast_sparse":
-            self.config.update({
-                "vehicles_count": 30,
-                "vehicles_density": 0.4,
-                "ego_initial_speed": 20.0,
-                "other_speed_range": [18, 24],
-                "ego_spacing": 1.5,
-                "speed_limit": 30,
-                "front_to_behind_ratio": 2,
-                "spawn_mode": "grid"
-            })
-            
-        elif scenario_type == "slow_dense":
-            self.config.update({
-                "vehicles_count": 20,
-                "vehicles_density": 0.8,
-                "ego_spacing": 1.5,
-                "ego_initial_speed": 10.0,
-                "other_speed_range": [6, 12],
-                "speed_limit": 15,
-                "front_to_behind_ratio": 2,
-                "spawn_mode": "grid"
-            })
-        
-        print(f"Scenario switched to: {scenario_type}")
-
     def _reward(self, action: Action) -> float:
         """
         The reward is defined to foster driving at high speed, on the rightmost lanes, and to avoid collisions.
