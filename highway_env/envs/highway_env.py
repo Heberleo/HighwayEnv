@@ -92,6 +92,24 @@ class HighwayEnv(AbstractEnv):
 
         return obs, reward, terminated, truncated, info
 
+    def out_of_traffic(self, traffic_threshold: int = 5) -> bool:
+        """Check if the ego vehicle is out of traffic, i.e. if there are at least traffic_threshold vehicles ahead and behind."""
+        vehicles_ahead = 0
+        vehicles_behind = 0
+
+        ego = self.controlled_vehicles[0]  # Assuming single ego vehicle for simplicity
+
+        for vehicle in self.road.vehicles:
+            if vehicle is not ego:
+                distance = abs(vehicle.position[0] - ego.position[0])
+                if vehicle.position[0] > ego.position[0] and distance < 250:
+                    vehicles_ahead += 1
+                elif vehicle.position[0] < ego.position[0] and distance < 500:
+                    vehicles_behind += 1
+                if vehicles_ahead >= traffic_threshold and vehicles_behind >= traffic_threshold:
+                    return False
+        return True
+
     def _create_road(self) -> None:
         """Create a road composed of straight adjacent lanes."""
         self.road = Road(
