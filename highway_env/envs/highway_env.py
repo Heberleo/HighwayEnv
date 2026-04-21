@@ -55,7 +55,9 @@ class HighwayEnv(AbstractEnv):
     def _reset(self) -> None:
         self._create_road()
         if self.config.get("spawn_mode", "standard") == "grid":
-            self._create_grid_of_vehicles()  # New method to create a grid of vehicles around the ego
+            self._create_ego_vehicle()
+            self._spawn_vehicles(spawn_range=(20, 300))  # Spawn an initial grid of vehicles around the ego vehicle
+            self._spawn_vehicles(spawn_range=(-200, 20))  # Spawn an initial grid of vehicles around the ego vehicle
         else:
             self._create_vehicles()  # Original method to create vehicles randomly on the road
 
@@ -81,7 +83,7 @@ class HighwayEnv(AbstractEnv):
 
         self.time += 1 / self.config["policy_frequency"]
         self._simulate(action)
-
+        
         obs = self.observation_type.observe()
         reward = self._reward(action)
         terminated = self._is_terminated()
@@ -153,11 +155,11 @@ class HighwayEnv(AbstractEnv):
                 vehicle.randomize_behavior()
                 self.road.vehicles.append(vehicle)
 
-    def _create_grid_of_vehicles(self) -> None:
+    def _create_vehicles_grid(self) -> None:
         """Create a grid of vehicles centered around the ego vehicle."""
         other_vehicles_type = utils.class_from_path(self.config["other_vehicles_type"])
 
-        BASE_DISTANCE = 15  # Base distance between vehicles at density=1. Adjust as needed.
+        BASE_DISTANCE = 20  # Base distance between vehicles at density=1. Adjust as needed.
         
         # 1. Spawn Ego Vehicle
         # We place it at a fixed x=30 to leave some room behind it
@@ -171,6 +173,7 @@ class HighwayEnv(AbstractEnv):
             spacing=self.config["ego_spacing"],
         )
         ego_x = vehicle.position[0]
+        ego_lane = vehicle.lane_index[2]
         
         # Use your create_at logic or direct instantiation
         ego = self.action_type.vehicle_class(
@@ -180,98 +183,61 @@ class HighwayEnv(AbstractEnv):
         self.controlled_vehicles.append(ego)
         self.road.vehicles.append(ego)
 
-        # 2. Grid Parameters
-        # dist_x: longitudinal spacing (e.g., 25m)
-        # vehicles_count: Total cars to spawn in the grid
-        dist_x = BASE_DISTANCE  / self.config["vehicles_density"]  # Scale distance by density to maintain spacing at different densities
+        dist_x = BASE_DISTANCE / self.config["vehicles_density"]  # Scale distance by density to maintain spacing at different densities
+
         num_lanes = self.config["lanes_count"]
-        
+
         # Define the range of the grid relative to ego (e.g., 2 rows behind, 4 ahead)
-        front_to_behind_ratio = self.config.get("front_to_behind_ratio", 2)  # More density means more cars ahead than behind
-        rows = self.config["vehicles_count"] // num_lanes 
+        front_to_behind_ratio = self.config.get("front_to_behind_ratio", 2) 
+        rows = (self.config["vehicles_count"] - num_lanes + 1) // (num_lanes  - 1)
         rows_behind = int(rows / (1 + front_to_behind_ratio))
         rows_ahead = rows - rows_behind
-        
-        speed_range = self.config.get("other_speed_range", [20, 25])
-        
+        rows = rows_behind + rows_ahead + 1  # Total rows including the ego row
+
+        # decide one lane index epr row to be left free
+        spawn_mask = self.np_random.choice([i for i in range(num_lanes)], size=(rows + 1))
+        # spawn vehicles in a grid around the ego vehicle
+        speed_range = self.config.get("other_speed_range", [20, 30])
         lane_objects = self.road.network.lanes_list()
-        x_pos_behind = 0
 
-        x_positions = np.zeros((num_lanes, rows_behind + rows_ahead))  # For debugging, to track where vehicles are spawned
-        # 3. Spawn the Grid
-        for lane_id in range(num_lanes):
-            for row in range(-rows_behind, rows_ahead):
-                # Don't spawn on the ego vehicle's exact spot
-                if lane_id == ego_lane and row == 0:
-                    continue
-                
-                row_ = row + 1 if row >= 0 else row  # Shift rows ahead by 1 to leave space for ego at row=0
-                x_row = ego_x + (row_ * dist_x)
+        x_positions = np.zeros((num_lanes, rows))  # For debugging, to track where vehicles are spawned
+        for row in range(-rows_behind, rows_ahead + 1):
+            # subdivide the row into num_lanes subrows
+            x_center = ego_x + (row * dist_x)
+            x_min = x_center - dist_x / 4.
+            x_max = x_center + dist_x / 4.
 
-                x_pos = 0.
-                if row_ == 1:  # First row ahead of ego, ensure it's at least dist_x away
-                    x_pos = x_row + (row * dist_x) + self.np_random.uniform(0, dist_x/2)
-                elif row_ == -1:  # First row behind ego, ensure it's at least dist_x away
-                    x_pos = x_row + (row * dist_x) - self.np_random.uniform(0, dist_x/2)
-                else:  # For other rows, ensure they are spaced from the last spawned vehicle in this lane
-                    x_pos = x_row + (row * dist_x) + self.np_random.uniform(-dist_x/2, dist_x/2)
 
-                # guard ego vehicle from being too close to any other vehicle, especially at low densities
-                if abs(x_pos - ego_x) < BASE_DISTANCE * self.config.get("ego_spacing", 1.0):  # Ensure at least ego spacing times density scaled distance from ego
-                    continue  # Skip this position if it's too close to ego after adjustment
-
-                if x_pos - x_pos_behind < BASE_DISTANCE: 
-                    x_pos += BASE_DISTANCE  # Ensure a minimum distance from the last spawned vehicle in this lane 
- 
-                x_pos_behind = x_pos
-
-                row_index = row + rows_behind  # Convert to 0-based index for storage
-                x_positions[lane_id, row_index] = x_pos  # Track this spawn position for debugging
-
-        # variate x positions per row to avoid traffic walls
-        for row in range(rows):
-            row_positions = x_positions[:, row]
-            # if positions are too close, add some noise
-            for i in range(1, len(row_positions)):
-                if abs(row_positions[i] - row_positions[i-1]) < BASE_DISTANCE:
-                    # move away from the previous vehicle by adding some noise, direction depends on whether it's 
-                    offset_direction = 1 if row_positions[i] > row_positions[i-1] else -1
-                    offset = 2 * BASE_DISTANCE * offset_direction
-                    row_positions[i] += offset
-                
-
-            x_positions[:, row] = row_positions
+            x_bases =  np.linspace(x_min, x_max, num_lanes)  # Base x positions for this row, one per lane
+            self.np_random.shuffle(x_bases)  # Shuffle the base positions to avoid perfectly aligned vehicles across lanes, which can cause unrealistic traffic patterns and collisions in the simulator
             
-        # check if any vehicles are too close now, delete them if so (this can happen at low densities where the initial randomization doesn't create enough spacing)
-        # only need to check within the same lane since vehicles in different lanes can be close without colliding
-        for lane_id in range(num_lanes):
-            lane_positions = x_positions[lane_id, :]
-            lane_positions.sort()  # Sort positions to check adjacent vehicles
-            for i in range(1, len(lane_positions)):
-                if abs(lane_positions[i] - lane_positions[i-1]) < BASE_DISTANCE:
-                    # If two vehicles are too close, remove the second one by setting its position to 0 (which will be ignored when spawning)
-                    lane_positions[i] = 0
-
-                if lane_id == ego_lane and abs(lane_positions[i] - ego_x) < BASE_DISTANCE * self.config.get("ego_spacing", 1.0):
-                    # If any vehicle is too close to the ego, remove it
-                    lane_positions[i] = 0
-                
-            x_positions[lane_id, :] = lane_positions
+            # add some noise to the x positions to avoid perfectly aligned vehicles, which can cause unrealistic traffic patterns and collisions in the simulator
+            noise = dist_x / num_lanes  / 4
+            x_bases += self.np_random.normal(0, noise, size=num_lanes)  # Add noise within a quarter of the distance between vehicles
+            x_bases.clip(x_min, x_max)  # Ensure the noisy positions are still within the bounds of the row
 
 
+            x_positions[:, row + rows_behind] = x_bases  # Store these positions for debugging and later use when spawning vehicles
 
         for lane_id in range(num_lanes):
             for row in range(rows):
-                # Add slight noise to speed
+                if lane_id == ego_lane and row == rows_behind:  # this is the ego vehicle
+                    continue
+                
+                if lane_id == spawn_mask[row] and not row == rows_behind:  # This lane is left free for this row
+                    continue
+                
+
+                speeds = np.linspace(*speed_range, num=rows)  # Create a range of speeds across the rows to add variability
+
+
+                v_speed = speeds[row] + self.np_random.normal(0, 2)  # Add some noise to the speed for variability
+
                 x_pos = x_positions[lane_id, row]
-                if x_pos == 0:  # This position was marked for removal due to being too close to another vehicle
-                    continue
-
-                v_speed = self.np_random.uniform(*speed_range)
-
-                # with a density based probability, randomly skip spawning a vehicle to create more realistic traffic patterns
-                if self.np_random.uniform(0, 1) > self.config["vehicles_density"] + 0.5:
-                    continue
+                if row > 0:
+                    prev_x_pos = x_positions[lane_id, row - 1]
+                    if abs(x_pos - prev_x_pos) < 5.0:
+                        continue
 
                 # Create the vehicle
                 lane = lane_objects[lane_id]
@@ -286,7 +252,156 @@ class HighwayEnv(AbstractEnv):
                 # Randomize IDM parameters (politeness, etc.)
                 vehicle.randomize_behavior()
                 self.road.vehicles.append(vehicle)
+
+    def _create_ego_vehicle(self) -> None:
+        """Create the ego vehicle in its initial position."""
+        ego_lane = self.config.get("initial_lane_id")
+        ego_speed = self.config.get("ego_initial_speed", 20.0)
+
+        vehicle = Vehicle.create_random(
+            self.road,
+            speed=ego_speed,
+            lane_id=ego_lane,
+            spacing=self.config["ego_spacing"],
+        )
         
+        ego = self.action_type.vehicle_class(
+            self.road, vehicle.position, vehicle.heading, vehicle.speed
+        )
+        self.controlled_vehicles = [ego]
+        self.road.vehicles.append(ego)
+
+    def _spawn_vehicles(self, spawn_range: tuple[float, float], existing_vehicles: list = []) -> None:
+        """Spawn new vehicles ahead of the ego vehicle to maintain traffic density."""
+        ego = self.controlled_vehicles[0]  # Assuming single ego vehicle for simplicity
+        ego_x = ego.position[0]
+
+        BASE_DISTANCE = 20  # Base distance between vehicles at density=1
+        # 2. Grid Parameters
+        # dist_x: longitudinal spacing (e.g., 25m)
+        # vehicles_count: Total cars to spawn in the grid
+        dist_x = BASE_DISTANCE  / self.config["vehicles_density"]  # Scale distance by density to maintain spacing at different densities
+        num_lanes = self.config["lanes_count"]
+
+        num_rows = int((spawn_range[1] - spawn_range[0]) // dist_x)
+
+        target_num_vehicles = num_rows * (num_lanes - 1)  # We will leave one lane free per row for variability
+
+        if existing_vehicles is not None and len(existing_vehicles) >= target_num_vehicles:
+            return  # We already have enough vehicles ahead, no need to spawn more
+
+        speed_range = self.config.get("other_speed_range", [20, 30])
+        lane_objects = self.road.network.lanes_list()
+        other_vehicles_type = utils.class_from_path(self.config["other_vehicles_type"])
+
+        # leave one random lane per subrow free
+        spawn_mask = np.zeros((num_lanes, num_rows), dtype=bool)
+        # randomly decide which lane to leave free for each row to ensure variability in traffic patterns and prevent perfectly aligned vehicles across lanes, which can cause unrealistic traffic patterns and collisions in the simulator
+        for row in range(num_rows):
+            free_lane = self.np_random.choice([i for i in range(num_lanes)])
+            spawn_mask[free_lane, row] = True  # Mark this lane as occupied for this row
+
+        # extract existing vehicles by lane
+        vehicles_per_lane = {lane_id: [] for lane_id in range(num_lanes)}
+        for lane_id in range(num_lanes):
+            lane_vehicles = [v for v in existing_vehicles if v.lane_index[2] == lane_id]
+            vehicles_per_lane[lane_id] = lane_vehicles
+
+        row_centers = ego_x + spawn_range[0] + np.arange(spawn_range[0] + dist_x / 2, spawn_range[1], dist_x)
+        for (lane_id, lane_vehicles) in vehicles_per_lane.items():
+            # clip existing vehicle to subdivision positions to avoid collisions with new vehicles
+            for vehicle in lane_vehicles:
+                dist_to_row_centers = np.abs(vehicle.position[0] - row_centers)
+                closest_base_idx = np.argmin(dist_to_row_centers)
+                spawn_mask[lane_id, closest_base_idx] = True  # Mark this lane as occupied for this row
+                
+        x_positions = np.zeros((num_lanes, num_rows))  # For debugging, to track where vehicles are spawned
+        for row in range(0, num_rows):
+            # subdivide the row into num_lanes subrows
+            x_center = ego_x + spawn_range[0] + dist_x / 2 + (row * dist_x)
+            x_min = x_center - dist_x / 4.
+            x_max = x_center + dist_x / 4.
+            x_bases =  np.linspace(x_min, x_max, num_lanes)  # Base x positions for this row, one per lane
+            self.np_random.shuffle(x_bases)  # Shuffle the base positions to avoid perfectly aligned vehicles across lanes, which can cause unrealistic traffic patterns and collisions in the simulator
+            
+            # add some noise to the x positions to avoid perfectly aligned vehicles, which can cause unrealistic traffic patterns and collisions in the simulator
+            noise = dist_x / num_lanes  / 4
+            x_bases += self.np_random.normal(0, noise, size=num_lanes)  # Add noise within a quarter of the distance between vehicles
+            x_bases.clip(x_min, x_max)  # Ensure the noisy positions are still within the bounds of the row
+
+
+            x_positions[:, row] = x_bases  # Store these positions for debugging and later use when spawning vehicles
+
+        for lane_id in range(num_lanes):
+            for row in range(num_rows):
+                
+                if spawn_mask[lane_id, row]:  # This lane is left free for this row
+                    continue
+
+                v_speed = self.np_random.uniform(*speed_range)
+
+                x_pos = x_positions[lane_id, row]
+                if row > 0:
+                    prev_x_pos = x_positions[lane_id, row - 1]
+                    if abs(x_pos - prev_x_pos) < 5.0:
+                        continue
+                
+                skip = False
+                for existing_vehicle in vehicles_per_lane[lane_id]:
+                    if abs(existing_vehicle.position[0] - x_pos) < BASE_DISTANCE:
+                        skip = True
+                        break
+                if skip:
+                    continue
+                            
+                # Create the vehicle
+                lane = lane_objects[lane_id]
+                vehicle = other_vehicles_type(
+                    self.road, 
+                    lane.position(x_pos, 0), 
+                    heading=lane.heading_at(x_pos), 
+                    speed=v_speed,
+                    target_speed=v_speed
+                )
+                
+                # Randomize IDM parameters (politeness, etc.)
+                vehicle.randomize_behavior()
+                self.road.vehicles.append(vehicle)
+
+    def _refresh_surrounding_traffic(self):
+        """Refresh the surrounding traffic by pruning distant vehicles and spawning new ones ahead and behind."""
+        vehicles_ahead, vehicles_behind = self._extract_and_prune(ahead_distance_range=(200, 300), behind_distance_range=(200, 300))
+
+        self._spawn_vehicles(spawn_range=(200, 300), existing_vehicles=vehicles_ahead)  # Example: spawn vehicles ahead
+        self._spawn_vehicles(spawn_range=[-200., -300.], existing_vehicles=vehicles_behind)  # Example: spawn 1 row of vehicles behind
+
+    def _extract_and_prune(self, ahead_distance_range: tuple[float, float], behind_distance_range: tuple[float, float] = (200, 300.0)) -> tuple[list[Vehicle], list[Vehicle]]:
+        # check if there are at least traffic_threshold vehicles ahead within the specified distance
+        ego = self.controlled_vehicles[0]  # Assuming single ego vehicle for simplicity
+        vehicles_ahead = []
+        vehicles_behind = []
+        
+        prune = []
+
+        for vehicle in self.road.vehicles:
+            if vehicle is not ego:
+                distance = vehicle.position[0] - ego.position[0]
+                if distance > 0:
+                    if distance < ahead_distance_range[1] and distance > ahead_distance_range[0]:
+                        vehicles_ahead.append(vehicle)
+                    elif distance > ahead_distance_range[1]:
+                        prune.append(vehicle)
+                else:
+                    if abs(distance) > behind_distance_range[0] and abs(distance) < behind_distance_range[1]:
+                        vehicles_behind.append(vehicle)
+                    elif abs(distance) > behind_distance_range[1]:
+                        prune.append(vehicle)   
+
+        for vehicle in prune:
+            self.road.vehicles.remove(vehicle)
+
+        return vehicles_ahead, vehicles_behind
+
     def _reward(self, action: Action) -> float:
         """
         The reward is defined to foster driving at high speed, on the rightmost lanes, and to avoid collisions.
