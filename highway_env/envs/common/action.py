@@ -330,107 +330,46 @@ class MultiAgentAction(ActionType):
             ]
         )
 
-class ExtendedDiscreteMetaAction(ActionType):
-    """
-    An discrete action space of meta-actions: lane changes, and cruise control set-point.
-    """
+class WeightedDiscrete(spaces.Discrete):
+    def __init__(self, n, probabilities, seed=None):
+        super().__init__(n, seed=seed)
+        assert len(probabilities) == n, "Must provide a probability for every action"
+        assert np.isclose(sum(probabilities), 1.0), "Probabilities must sum to 1.0"
+        self.probabilities = np.array(probabilities)
 
-    ACTIONS_ALL = {0: "LANE_LEFT", 1: "IDLE", 2: "LANE_RIGHT", 3: "FASTER", 4: "SLOWER", 5: "BRAKE"}
-    """A mapping of action indexes to labels."""
+    def sample(self, mask=None):
+        if mask is not None:
+            # If masking is used (e.g., lane change blocked), recalculate probabilities
+            masked_probs = self.probabilities * mask
+            if np.sum(masked_probs) == 0:
+                # Fallback if all preferred actions are masked
+                return super().sample(mask) 
+            masked_probs /= np.sum(masked_probs)
+            return self.np_random.choice(self.n, p=masked_probs)
+        
+        return self.np_random.choice(self.n, p=self.probabilities)
 
-    ACTIONS_LONGI = {0: "SLOWER", 1: "IDLE", 2: "FASTER", 3: "BRAKE"}
-    """A mapping of longitudinal action indexes to labels."""
-
-    ACTIONS_LAT = {0: "LANE_LEFT", 1: "IDLE", 2: "LANE_RIGHT"}
-    """A mapping of lateral action indexes to labels."""
-
+class BiasedDiscreteMetaAction(DiscreteMetaAction):
     def __init__(
         self,
-        env: AbstractEnv,
+        env,
         longitudinal: bool = True,
         lateral: bool = True,
-        target_speeds: Vector | None = None,
+        target_speeds = None,
+        action_probs: list = None,
         **kwargs,
     ) -> None:
-        """
-        Create a discrete action space of meta-actions.
-
-        :param env: the environment
-        :param longitudinal: include longitudinal actions
-        :param lateral: include lateral actions
-        :param target_speeds: the list of speeds the vehicle is able to track
-        """
-        super().__init__(env)
-        self.longitudinal = longitudinal
-        self.lateral = lateral
-        self.target_speeds = (
-            np.array(target_speeds)
-            if target_speeds is not None
-            else MDPVehicle.DEFAULT_TARGET_SPEEDS
-        )
-        self.actions = (
-            self.ACTIONS_ALL
-            if longitudinal and lateral
-            else (
-                self.ACTIONS_LONGI
-                if longitudinal
-                else self.ACTIONS_LAT if lateral else None
-            )
-        )
-        if self.actions is None:
-            raise ValueError(
-                "At least longitudinal or lateral actions must be included"
-            )
-        self.actions_indexes = {v: k for k, v in self.actions.items()}
+        super().__init__(env, longitudinal, lateral, target_speeds, **kwargs)
+        
+        # Default to uniform if none provided
+        if action_probs is None:
+            self.action_probs = np.ones(len(self.actions)) / len(self.actions)
+        else:
+            self.action_probs = action_probs
 
     def space(self) -> spaces.Space:
-        return spaces.Discrete(len(self.actions))
-
-    @property
-    def vehicle_class(self) -> Callable:
-        return functools.partial(MDPVehicle, target_speeds=self.target_speeds)
-
-    def act(self, action: int | np.ndarray) -> None:
-        self.controlled_vehicle.act(self.actions[int(action)])
-
-    def get_available_actions(self) -> list[int]:
-        """
-        Get the list of currently available actions.
-
-        Lane changes are not available on the boundary of the road, and speed changes are not available at
-        maximal or minimal speed.
-
-        :return: the list of available actions
-        """
-        actions = [self.actions_indexes["IDLE"], self.actions_indexes["BRAKE"]]
-        network = self.controlled_vehicle.road.network
-        for l_index in network.side_lanes(self.controlled_vehicle.lane_index):
-            if (
-                l_index[2] < self.controlled_vehicle.lane_index[2]
-                and network.get_lane(l_index).is_reachable_from(
-                    self.controlled_vehicle.position
-                )
-                and self.lateral
-            ):
-                actions.append(self.actions_indexes["LANE_LEFT"])
-            if (
-                l_index[2] > self.controlled_vehicle.lane_index[2]
-                and network.get_lane(l_index).is_reachable_from(
-                    self.controlled_vehicle.position
-                )
-                and self.lateral
-            ):
-                actions.append(self.actions_indexes["LANE_RIGHT"])
-        if (
-            self.controlled_vehicle.speed_index
-            < self.controlled_vehicle.target_speeds.size - 1
-            and self.longitudinal
-        ):
-            actions.append(self.actions_indexes["FASTER"])
-        if self.controlled_vehicle.speed_index > 0 and self.longitudinal:
-            actions.append(self.actions_indexes["SLOWER"])
-        return actions
-
+        # Return our custom space instead of the default Discrete space
+        return WeightedDiscrete(len(self.actions), probabilities=self.action_probs)
 
 
 def action_factory(env: AbstractEnv, config: dict) -> ActionType:
@@ -440,9 +379,10 @@ def action_factory(env: AbstractEnv, config: dict) -> ActionType:
         return DiscreteAction(env, **config)
     elif config["type"] == "DiscreteMetaAction":
         return DiscreteMetaAction(env, **config)
-    elif config["type"] == "ExtendedDiscreteMetaAction":
-        return ExtendedDiscreteMetaAction(env, **config)
     elif config["type"] == "MultiAgentAction":
         return MultiAgentAction(env, **config)
+    elif config["type"] == "BiasedDiscreteMetaAction":
+        return BiasedDiscreteMetaAction(env, **config)
+
     else:
         raise ValueError("Unknown action type")

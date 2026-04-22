@@ -8,7 +8,7 @@ from highway_env.envs.common.abstract import AbstractEnv
 from highway_env.envs.common.action import Action
 from highway_env.road.road import Road, RoadNetwork
 from highway_env.utils import near_split
-from highway_env.vehicle.controller import ControlledVehicle
+from highway_env.vehicle.controller import ControlledVehicle, MDPVehicle
 from highway_env.vehicle.kinematics import Vehicle
 
 
@@ -67,6 +67,11 @@ class HighwayEnv(AbstractEnv):
         for vehicle in self.controlled_vehicles:
             if isinstance(vehicle, ControlledVehicle):
                 vehicle.set_action_offsets(longitudinal_wind, lateral_wind)
+
+        if self.config.get("brake_failure", False):
+            for vehicle in self.controlled_vehicles:
+                if isinstance(vehicle, MDPVehicle):
+                    vehicle.break_brake()
 
     def step(self, action: Action) -> tuple[np.ndarray, float, bool, bool, dict]:
         """
@@ -230,12 +235,12 @@ class HighwayEnv(AbstractEnv):
                 x_pos = x_positions[lane_id, row]
                 if row > 0:
                     prev_x_pos = x_positions[lane_id, row - 1]
-                    if abs(x_pos - prev_x_pos) < 10.0:
+                    if abs(x_pos - prev_x_pos) < dist_x / 2.:
                         continue
                 
                 skip = False
                 for existing_vehicle in vehicles_per_lane[lane_id]:
-                    if abs(existing_vehicle.position[0] - x_pos) < BASE_DISTANCE:
+                    if abs(existing_vehicle.position[0] - x_pos) < dist_x / 2.:
                         skip = True
                         break
                 if skip:

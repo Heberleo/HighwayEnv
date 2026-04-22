@@ -294,6 +294,8 @@ class MDPVehicle(ControlledVehicle):
         self.lock_controls = False
         self.last_target_lane_index = self.target_lane_index
 
+        self.brake_broken = False
+
     def emergency_brake(self) -> None:
         """
         Perform an emergency brake, by setting the target speed to 0.
@@ -304,6 +306,17 @@ class MDPVehicle(ControlledVehicle):
 
         self.target_lane_index = self.last_target_lane_index # TODO experimental
         self.lock_controls = True
+
+    def break_brake(self) -> None:
+        """
+        Break the brake.
+        The vehicle now brakes significantly slower, by decreasing the target speed by 0.5 m/s at each "SLOWER" action instead of changing the speed index.
+        """
+        self.brake_broken = True
+
+    def repair_brake(self) -> None:
+        """Repair the brake."""
+        self.brake_broken = False
 
     def set_target_speed(self, target_speed: float) -> None:
         """
@@ -332,18 +345,20 @@ class MDPVehicle(ControlledVehicle):
 
         self.last_target_lane_index = self.target_lane_index
 
-        if action == "BRAKE":
-            self.target_speed = 0
-            self.speed_index = self.speed_to_index(self.target_speed)
+        if self.lock_controls:
             super().act()
             return
 
         if action == "FASTER":
             # self.speed_index = min(self.speed_index + 1, self.target_speeds.size - 1)
             self.speed_index = self.speed_to_index(self.speed) + 1
-        elif action == "SLOWER":
+        elif action == "SLOWER" and not self.brake_broken:
             # self.speed_index = max(self.speed_index - 1, 0)
             self.speed_index = self.speed_to_index(self.speed) - 1
+        elif action == "SLOWER" and self.brake_broken:
+            self.target_speed = self.target_speed - 0.5
+            self.speed_index = self.speed_to_index(self.target_speed)
+
         else:
             super().act(action)
             return
