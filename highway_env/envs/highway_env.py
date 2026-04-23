@@ -201,8 +201,10 @@ class HighwayEnv(AbstractEnv):
             # clip existing vehicle to subdivision positions to avoid collisions with new vehicles
             for vehicle in lane_vehicles:
                 dist_to_row_centers = np.abs(vehicle.position[0] - row_centers)
-                closest_base_idx = np.argmin(dist_to_row_centers)
-                spawn_mask[lane_id, closest_base_idx] = True  # Mark this lane as occupied for this row
+                
+                for idx, dist in enumerate(dist_to_row_centers):
+                    if dist < dist_x / 2.5:
+                        spawn_mask[lane_id, idx] = True  # Mark this lane as occupied for this row
                 
         x_positions = np.zeros((num_lanes, num_rows))  # For debugging, to track where vehicles are spawned
         speeds = np.zeros((num_lanes, num_rows))  # For debugging, to track the speeds of spawned vehicles
@@ -268,7 +270,7 @@ class HighwayEnv(AbstractEnv):
         """Refresh the surrounding traffic by pruning distant vehicles and spawning new ones ahead and behind."""
         vehicles_ahead, vehicles_behind = self._extract_and_prune(ahead_distance_range=(200, 400), behind_distance_range=(200, 300))
 
-        self._spawn_vehicles(spawn_range=(200, 400), existing_vehicles=vehicles_ahead)  # Example: spawn vehicles ahead
+        self._spawn_vehicles(spawn_range=(250, 400), existing_vehicles=vehicles_ahead)  # Example: spawn vehicles ahead
         self._spawn_vehicles(spawn_range=[-200., -300.], existing_vehicles=vehicles_behind)  # Example: spawn 1 row of vehicles behind
 
     def _extract_and_prune(self, ahead_distance_range: tuple[float, float], behind_distance_range: tuple[float, float] = (200, 300.0)) -> tuple[list[Vehicle], list[Vehicle]]:
