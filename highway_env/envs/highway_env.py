@@ -206,6 +206,9 @@ class HighwayEnv(AbstractEnv):
                 
         x_positions = np.zeros((num_lanes, num_rows))  # For debugging, to track where vehicles are spawned
         speeds = np.zeros((num_lanes, num_rows))  # For debugging, to track the speeds of spawned vehicles
+        low_speed, high_speed = speed_range
+        low_speed += 1.
+        high_speed -= 1.  # Add a margin to the speed range to avoid spawning vehicles at the exact min/max speeds, which can cause unrealistic traffic patterns and collisions in the simulator
         base_speeds = np.linspace(*speed_range, num=num_lanes)  # Create a range of base speeds across the rows to add variability
         for row in range(0, num_rows):
             # subdivide the row into num_lanes subrows
@@ -224,6 +227,7 @@ class HighwayEnv(AbstractEnv):
 
             speeds[:, row] = base_speeds
             speeds[:, row] += self.np_random.normal(0, 2, size=num_lanes)  # Add some noise to the speed for variability
+            speeds[:, row] = np.clip(speeds[:, row], *speed_range)  # Ensure speeds are within the specified range
             self.np_random.shuffle(speeds[:, row])  # Shuffle speeds to avoid perfectly aligned vehicles across lanes, which can cause unrealistic traffic patterns and collisions in the simulator
 
         for lane_id in range(num_lanes):
