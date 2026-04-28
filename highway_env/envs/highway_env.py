@@ -87,6 +87,10 @@ class HighwayEnv(AbstractEnv):
             )
 
         self.time += 1 / self.config["policy_frequency"]
+
+
+        # EXPERIMENTAL: Prune vehicles, effectively only behind the ego vehicle, to improve performance.
+        self._extract_and_prune(ahead_distance_range=(1000, 1400), behind_distance_range=(200, 500))  
         self._simulate(action)
         
         obs = self.observation_type.observe()
@@ -135,6 +139,17 @@ class HighwayEnv(AbstractEnv):
                 speed = self.np_random.uniform(*speed_range)
 
                 vehicle = other_vehicles_type.create_random(
+                    self.road, 
+                    spacing=1 / self.config["vehicles_density"],
+                    speed=speed
+                )
+                vehicle.randomize_behavior()
+                self.road.vehicles.append(vehicle)
+
+            for _ in range(5):
+                speed = self.np_random.uniform(*speed_range)
+
+                vehicle = other_vehicles_type.create_random_behind(
                     self.road, 
                     spacing=1 / self.config["vehicles_density"],
                     speed=speed

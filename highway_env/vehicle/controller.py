@@ -346,6 +346,7 @@ class MDPVehicle(ControlledVehicle):
         self.last_target_lane_index = self.target_lane_index
 
         if self.lock_controls:
+            self.target_lane_index = self.lane_index
             super().act()
             return
 
