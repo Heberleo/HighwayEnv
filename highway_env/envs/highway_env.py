@@ -131,17 +131,12 @@ class HighwayEnv(AbstractEnv):
         speed_per_lane = speed_per_lane[::-1]  # Higher speeds on the right lanes, lower speeds on the left lanes, to foster lane changing and realistic traffic patterns
         speed_variation = self.config.get("speed_variation", 1)  # Add some variability to the speed of vehicles in the same lane to foster lane changing and realistic traffic patterns
 
-        spawn_p = np.linspace(0, 1, len(lanes))
-        spawn_p = np.ones_like(spawn_p)  # Start with equal probabilities for all lanes
-        spawn_p /= spawn_p.sum()  # Normalize to get probabilities that sum to 1
-        spawn_p = spawn_p[::-1]  # Higher probability of spawning on the right lanes, to foster lane changing and realistic traffic patterns
-
         for others in other_per_controlled:
             vehicle = Vehicle.create_random(
                 self.road,
                 speed=self.config.get("ego_initial_speed", 20.0),
                 lane_id=self.config["initial_lane_id"],
-                spacing=self.config["ego_spacing"],
+                spacing=self.config["ego_spacing"]
             )
             vehicle = self.action_type.vehicle_class(
                 self.road, vehicle.position, vehicle.heading, vehicle.speed
@@ -150,7 +145,7 @@ class HighwayEnv(AbstractEnv):
             self.road.vehicles.append(vehicle)
 
             for _ in range(others):       
-                lane_id = self.np_random.choice(len(lanes), p=spawn_p)  # Favor spawning more vehicles on the right lanes to foster lane changing and realistic traffic patterns
+                lane_id = self.np_random.choice(len(lanes))  # Favor spawning more vehicles on the right lanes to foster lane changing and realistic traffic patterns
                 lane_speed = speed_per_lane[lane_id]
                 speed = self.np_random.uniform(lane_speed - speed_variation, lane_speed + speed_variation)  # Add some variability to the speed of vehicles in the same lane
                 vehicle = other_vehicles_type.create_random(
@@ -165,7 +160,7 @@ class HighwayEnv(AbstractEnv):
                 self.road.vehicles.append(vehicle)
 
             for _ in range(5):
-                lane_id = self.np_random.choice(len(lanes), p=spawn_p)  # Favor spawning more vehicles on the right lanes to foster lane changing and realistic traffic patterns
+                lane_id = self.np_random.choice(len(lanes))  # Favor spawning more vehicles on the right lanes to foster lane changing and realistic traffic patterns
                 lane_speed = speed_per_lane[lane_id]
                 speed = self.np_random.uniform(lane_speed - speed_variation, lane_speed + speed_variation)  # Add some variability to the speed of vehicles in the same lane
                 vehicle = other_vehicles_type.create_random_behind(
