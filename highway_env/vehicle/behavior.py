@@ -203,7 +203,7 @@ class IDMVehicle(ControlledVehicle):
         :param projected: project 2D velocities in 1D space
         :return: the desired distance between the two [m]
         """
-        d0 = self.DISTANCE_WANTED
+        d0 = self.DISTANCE_WANTED 
         tau = self.TIME_WANTED
         ab = -self.COMFORT_ACC_MAX * self.COMFORT_ACC_MIN
         dv = (
@@ -317,6 +317,25 @@ class IDMVehicle(ControlledVehicle):
                     - old_following_a
                 )
             )
+
+            # --- INJECT RIGHT-LANE PREFERENCE ---
+            # Define how strong the urge to move right is (in m/s^2)
+            # You can make this a class attribute like self.LANE_CHANGE_RIGHT_BIAS
+            right_bias = 0.9 
+            left_bias = 0.0
+            
+            current_lane = self.lane_index[2]
+            candidate_lane = lane_index[2]
+
+            if candidate_lane > current_lane:
+                # We are evaluating moving RIGHT. Give it a mathematical bonus.
+                jerk += right_bias
+            elif candidate_lane < current_lane:
+                # We are evaluating moving LEFT. Apply a penalty.
+                # They will only move left if they are stuck behind a VERY slow car.
+                jerk -= left_bias
+            # ------------------------------------
+
             if jerk < self.LANE_CHANGE_MIN_ACC_GAIN:
                 return False
 

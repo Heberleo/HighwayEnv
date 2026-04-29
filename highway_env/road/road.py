@@ -294,7 +294,7 @@ class RoadNetwork:
         start: float = 0.0,
         length: float = 10000.0,
         angle: float = 0.0,
-        speed_limit: float = 30.0,
+        speed_limit: float = 30.0 | List[float],
         nodes_str: tuple[str, str] | None = None,
         net: RoadNetwork | None = None,
     ) -> RoadNetwork:
@@ -312,10 +312,15 @@ class RoadNetwork:
                 LineType.CONTINUOUS_LINE if lane == 0 else LineType.STRIPED,
                 LineType.CONTINUOUS_LINE if lane == lanes - 1 else LineType.NONE,
             ]
+            if isinstance(speed_limit, list):
+                speed_limit_lane = speed_limit[lane % len(speed_limit)]
+            else:
+                speed_limit_lane = speed_limit
+
             net.add_lane(
                 *nodes_str,
                 StraightLane(
-                    origin, end, line_types=line_types, speed_limit=speed_limit
+                    origin, end, line_types=line_types, speed_limit=speed_limit_lane
                 ),
             )
         return net
