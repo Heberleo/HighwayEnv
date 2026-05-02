@@ -321,7 +321,7 @@ class IDMVehicle(ControlledVehicle):
             # --- INJECT RIGHT-LANE PREFERENCE ---
             # Define how strong the urge to move right is (in m/s^2)
             # You can make this a class attribute like self.LANE_CHANGE_RIGHT_BIAS
-            right_bias = 0.9 
+            right_bias = 0.0 
             left_bias = 0.0
             
             current_lane = self.lane_index[2]

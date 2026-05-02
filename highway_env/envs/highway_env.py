@@ -127,7 +127,6 @@ class HighwayEnv(AbstractEnv):
         lane_to = list(graph[lane_from].keys())[0]
         lanes = graph[lane_from][lane_to]
         speed_per_lane = np.linspace(*self.config.get("other_speed_range", [20, 30]), num=len(lanes))
-        speed_per_lane += np.linspace(0, len(lanes), num=len(lanes))
         speed_per_lane = speed_per_lane[::-1]  # Higher speeds on the right lanes, lower speeds on the left lanes, to foster lane changing and realistic traffic patterns
         speed_variation = self.config.get("speed_variation", 1)  # Add some variability to the speed of vehicles in the same lane to foster lane changing and realistic traffic patterns
 

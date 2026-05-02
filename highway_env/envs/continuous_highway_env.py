@@ -1,0 +1,188 @@
+from __future__ import annotations
+from turtle import speed
+
+import numpy as np
+
+from highway_env import utils
+from highway_env import road
+from highway_env.envs.common.abstract import AbstractEnv
+from highway_env.envs.common.action import Action
+from highway_env.road import lane
+from highway_env.road.road import Road, RoadNetwork
+from highway_env.utils import near_split
+from highway_env.vehicle.kinematics import Vehicle
+
+class ContinuousHighwayEnv(AbstractEnv):
+    """A highway environment with continuous action space."""
+        
+    @classmethod
+    def default_config(cls) -> dict:
+        config = super().default_config()
+        config.update(
+            {
+                "observation": {
+                    "type": "Kinematics",
+                    "attributes": ["x", "y", "vx", "vy"],
+                    "relative": True,
+                    "normalize": True,
+                },
+                "action": {
+                    "type": "ContinuousAction",
+                    "steering_range": [-np.pi / 4, np.pi / 4],
+                    "acceleration_range": [-2, 2],
+                    "longitudinal": True,
+                    "lateral": True,
+                    "dynamical": False,
+                },
+                "simulation_frequency": 10,
+                "policy_frequency": 10,
+                "screen_width": 1200,
+                "screen_height": 300,
+                "scaling": 7,
+                "centering_position": [0.3, 0.5],
+
+                "duration": 40,  # [s]
+
+                "ego_initial_speed": 7.0,
+                "reward_speed_range": [5, 10],
+                "penalty_speed_range": [0, 5],
+
+                # road and traffic
+                "lanes_count": 4,
+                "vehicles_count": 10,
+                "other_speed_range": [5, 10],
+                "initial_lane_id": None,  # If None, a random lane is sampled
+
+                "right_lane_reward": 0.0,  # Reward for being in the rightmost lane
+                "high_speed_reward": 0.2,  # Reward for driving at high speed
+                "low_speed_penalty": -0.2,  # Penalty for driving at low speed
+                "collision_reward": -1.0,  # Penalty for collisions
+                "heading_penalty": -2.0,  # Penalty for heading deviation from lane direction
+                "off_road_penalty": -1.0  # Penalty for being off the road 
+            }
+        )
+        return config
+    
+    def _reset(self) -> None:
+        self._create_road()
+        self._create_vehicles()
+        
+    
+    def _create_road(self):
+        """Create a road composed of straight adjacent lanes."""
+        self.road = Road(
+            network=RoadNetwork.straight_road_network(self.config["lanes_count"]),
+            np_random=self.np_random
+        )
+
+    def _create_vehicles(self):
+        """Create vehicles as specified in the configuration."""
+        vehicle = Vehicle.create_random(
+            self.road,
+            lane_id=self.config["initial_lane_id"],
+            speed=self.config["ego_initial_speed"]
+        )
+        vehicle = self.action_type.vehicle_class(
+            self.road, vehicle.position, vehicle.heading, vehicle.speed
+        )
+        self.road.vehicles.append(vehicle)
+        self.vehicle = vehicle
+
+        # TODO: other vehicles
+
+    def step(self, action: Action) -> tuple[np.ndarray, float, bool, bool, dict]:
+        """
+        Perform an action, advance the simulation, and keep surrounding traffic populated.
+
+        This mirrors the base environment step logic, but refreshes nearby traffic after the
+        simulation step so vehicles that drift too far away are pruned and new vehicles are
+        spawned ahead of / behind the controlled vehicle(s).
+        """
+        if self.road is None or self.vehicle is None:
+            raise NotImplementedError(
+                "The road and vehicle must be initialized in the environment implementation"
+            )
+
+        self.time += 1 / self.config["policy_frequency"]
+
+        self._simulate(action)
+        
+        obs = self.observation_type.observe()
+        reward = self._reward(action)
+        terminated = self._is_terminated()
+        truncated = self._is_truncated()
+        info = self._info(obs, action)
+        if self.render_mode == "human":
+            self.render()
+
+        return obs, reward, terminated, truncated, info
+    
+
+    def _reward(self, action):
+        """
+        The reward is defined to foster driving at high speed, on the rightmost lanes, and to avoid collisions.
+        :param action: the last action performed
+        :return: the corresponding reward
+        """
+        rewards = self._rewards(action)
+        reward = sum(
+            self.config.get(name, 0) * reward for name, reward in rewards.items()
+        )
+        return reward
+
+    def _is_terminated(self) -> bool:
+        """The episode is over if the ego vehicle crashed."""
+        return (
+            self.vehicle.crashed
+            or not self.vehicle.on_road
+        )
+
+    def _is_truncated(self) -> bool:
+        """The episode is truncated if the time limit is reached."""
+        return self.time >= self.config["duration"]
+
+    def _rewards(self, action) -> dict[str, float]:
+        """Compute all individual reward components."""
+        neighbours = self.road.network.all_side_lanes(self.vehicle.lane_index)
+        lane = self.vehicle.lane_index[2]
+
+        # Use forward speed rather than speed, see https://github.com/eleurent/highway-env/issues/268
+        forward_speed = self.vehicle.speed * np.cos(self.vehicle.heading)
+        scaled_speed = utils.lmap(
+            forward_speed, self.config["reward_speed_range"], [0, 1]
+        )
+
+        low_scaled_speed = utils.lmap(
+            forward_speed, self.config["penalty_speed_range"], [0, 1]
+        )
+        low_scaled_speed = 1 - low_scaled_speed  # We want a penalty for low speeds, so we invert the scale
+        
+        heading_penalty = self._heading_deviation_penalty()
+
+        return {
+            "collision_reward": float(self.vehicle.crashed),
+            "right_lane_reward": lane / max(len(neighbours) - 1, 1),
+            "high_speed_reward": np.clip(scaled_speed, 0, 1),
+            "low_speed_penalty": np.clip(low_scaled_speed, 0, 1),
+            "off_road_penalty": float(not self.vehicle.on_road),
+            "heading_penalty": heading_penalty,
+        }
+    def _heading_deviation_penalty(self) -> float:
+        # 1. Get raw angles (in radians)
+        vehicle_heading = self.vehicle.heading
+        
+        # 2. Get the lane's heading at the vehicle's current position (actually, in this road network setup, the lane heading is constant)
+        lane = self.vehicle.lane
+        longitudinal, _ = lane.local_coordinates(self.vehicle.position)
+        lane_heading = lane.heading_at(longitudinal)
+        
+        # 3. Calculate the shortest angular difference (handles the 360-degree wrap-around)
+        # This guarantees the difference is strictly between -pi and +pi
+        angle_diff = (vehicle_heading - lane_heading + np.pi) % (2 * np.pi) - np.pi
+        
+        # 4. Calculate the Cosine Penalty
+        # cos(0) = 1 (perfect alignment). cos(90 deg) = 0.
+        # Therefore, 1 - cos(theta) gives us 0 for perfect, and 1 for a 90-degree swerve.
+        penalty = 1.0 - np.cos(angle_diff)
+        
+        return penalty
