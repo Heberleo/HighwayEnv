@@ -51,6 +51,7 @@ class ContinuousHighwayEnv(AbstractEnv):
                 "penalty_speed_range": [0, 5],
 
                 # road and traffic
+                "traffic": None,
                 "lanes_count": 4,
                 "vehicles_count": 10,
                 "other_speed_range": [5, 10],
@@ -98,7 +99,10 @@ class ContinuousHighwayEnv(AbstractEnv):
         self.road.vehicles.append(vehicle)
         self.vehicle = vehicle
 
-        self._slalom_traffic()  # Add some traffic to make the environment more realistic and challenging
+        if self.config["traffic"] is None:
+            return  # No traffic to add
+        elif self.config["traffic"] == "slalom":
+            self._slalom_traffic()  # Add some traffic to make the environment more realistic and challenging
 
     def step(self, action: Action) -> tuple[np.ndarray, float, bool, bool, dict]:
         """
