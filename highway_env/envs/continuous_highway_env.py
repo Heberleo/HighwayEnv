@@ -216,8 +216,7 @@ class ContinuousHighwayEnv(AbstractEnv):
         num_vehicles = 8
         ego_position = self.vehicle.position
         distance = 50
-        speed = 7
-        counter = 0
+        speed = self.config["other_speed_range"][0]  # All vehicles in the slalom traffic have the same speed
 
         for i in range(num_vehicles // num_lanes):
             # create random permutation of lane indices for this batch of vehicles
