@@ -215,7 +215,7 @@ class ContinuousHighwayEnv(AbstractEnv):
 
         num_vehicles = 8
         ego_position = self.vehicle.position
-        distance = 50
+        distance = 30
         speed = self.config["other_speed_range"][0]  # All vehicles in the slalom traffic have the same speed
         counter = 0
         for i in range(num_vehicles // num_lanes):
