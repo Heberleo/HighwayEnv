@@ -23,13 +23,14 @@ class ContinuousHighwayEnv(AbstractEnv):
                 "observation": {
                     "type": "Kinematics",
                     "attributes": ["x", "y", "vx", "vy"],
+                    "see_behind": True,
                     "relative": True,
                     "normalize": True,
                 },
                 "action": {
                     "type": "ContinuousAction",
-                    "steering_range": [-np.pi / 4, np.pi / 4],
-                    "acceleration_range": [-2, 2],
+                    "steering_range": [-0.15, 0.15],
+                    "acceleration_range": [-7.5, 2.5],
                     "longitudinal": True,
                     "lateral": True,
                     "dynamical": False,
@@ -40,6 +41,8 @@ class ContinuousHighwayEnv(AbstractEnv):
                 "screen_height": 300,
                 "scaling": 7,
                 "centering_position": [0.3, 0.5],
+
+
 
                 "duration": 40,  # [s]
 
@@ -52,12 +55,14 @@ class ContinuousHighwayEnv(AbstractEnv):
                 "vehicles_count": 10,
                 "other_speed_range": [5, 10],
                 "initial_lane_id": None,  # If None, a random lane is sampled
+                "initial_heading": None,  # If None, the lane heading is used, if "random", a random heading is sampled
 
                 "right_lane_reward": 0.0,  # Reward for being in the rightmost lane
                 "high_speed_reward": 0.2,  # Reward for driving at high speed
                 "low_speed_penalty": -0.2,  # Penalty for driving at low speed
                 "collision_reward": -1.0,  # Penalty for collisions
                 "heading_penalty": -2.0,  # Penalty for heading deviation from lane direction
+                "lateral_penalty": -0.5,  # Penalty for being far from the lane center
                 "off_road_penalty": -1.0  # Penalty for being off the road 
             }
         )
@@ -82,13 +87,18 @@ class ContinuousHighwayEnv(AbstractEnv):
             lane_id=self.config["initial_lane_id"],
             speed=self.config["ego_initial_speed"]
         )
+        heading = vehicle.heading
+        if self.config["initial_heading"] == "random":
+            heading = self.np_random.uniform(-np.pi/4, np.pi/4)  # Random initial heading within a reasonable range
+
         vehicle = self.action_type.vehicle_class(
-            self.road, vehicle.position, vehicle.heading, vehicle.speed
+            self.road, vehicle.position, heading, vehicle.speed
         )
+
         self.road.vehicles.append(vehicle)
         self.vehicle = vehicle
 
-        # TODO: other vehicles
+        self._slalom_traffic()  # Add some traffic to make the environment more realistic and challenging
 
     def step(self, action: Action) -> tuple[np.ndarray, float, bool, bool, dict]:
         """
@@ -156,8 +166,8 @@ class ContinuousHighwayEnv(AbstractEnv):
             forward_speed, self.config["penalty_speed_range"], [0, 1]
         )
         low_scaled_speed = 1 - low_scaled_speed  # We want a penalty for low speeds, so we invert the scale
-        
-        heading_penalty = self._heading_deviation_penalty()
+    
+        heading_penalty, lateral_penalty = self._lane_penalties()
 
         return {
             "collision_reward": float(self.vehicle.crashed),
@@ -166,14 +176,16 @@ class ContinuousHighwayEnv(AbstractEnv):
             "low_speed_penalty": np.clip(low_scaled_speed, 0, 1),
             "off_road_penalty": float(not self.vehicle.on_road),
             "heading_penalty": heading_penalty,
+            "lateral_penalty": lateral_penalty  # Penalize being in the leftmost or rightmost lane to foster lane keeping
         }
-    def _heading_deviation_penalty(self) -> float:
+    
+    def _lane_penalties(self) -> tuple[float, float]:
         # 1. Get raw angles (in radians)
         vehicle_heading = self.vehicle.heading
         
         # 2. Get the lane's heading at the vehicle's current position (actually, in this road network setup, the lane heading is constant)
         lane = self.vehicle.lane
-        longitudinal, _ = lane.local_coordinates(self.vehicle.position)
+        longitudinal, lateral = lane.local_coordinates(self.vehicle.position)
         lane_heading = lane.heading_at(longitudinal)
         
         # 3. Calculate the shortest angular difference (handles the 360-degree wrap-around)
@@ -183,6 +195,34 @@ class ContinuousHighwayEnv(AbstractEnv):
         # 4. Calculate the Cosine Penalty
         # cos(0) = 1 (perfect alignment). cos(90 deg) = 0.
         # Therefore, 1 - cos(theta) gives us 0 for perfect, and 1 for a 90-degree swerve.
-        penalty = 1.0 - np.cos(angle_diff)
+        heading_penalty = 1.0 - np.cos(angle_diff)
+
+        # 5. Calculate penalty for being far from the lane center (lateral deviation)
+        # This encourages the vehicle to stay centered in the lane, which is important for safety and realism.
+        lateral_distance = lane.distance(self.vehicle.position)
+        width = lane.width_at(longitudinal)
+        lateral_penalty = (lateral_distance / (width / 2))
         
-        return penalty
+        return heading_penalty, lateral_penalty
+    
+    def _slalom_traffic(self):
+        num_lanes = self.config["lanes_count"]
+        lanes = self.road.network.lanes_list()
+
+        num_vehicles = 8
+        ego_position = self.vehicle.position
+        distance = 50
+        speed = 7
+        counter = 0
+
+        for i in range(num_vehicles // num_lanes):
+            # create random permutation of lane indices for this batch of vehicles
+            lane_indices = self.np_random.permutation(num_lanes)
+            for lane_index in lane_indices:
+                # spawn a vehicle in the current lane
+                lane = lanes[lane_index]
+                x = lane.position(ego_position[0], ego_position[1])[0]  # spawn behind the ego vehicle
+                x += distance + counter * distance  # space out vehicles by a certain distance
+                counter += 1
+                vehicle = Vehicle(self.road, lane.position(x, 0), lane.heading_at(0), speed)
+                self.road.vehicles.append(vehicle)
