@@ -266,7 +266,7 @@ class ContinuousHighwayEnv(AbstractEnv):
         for i in range(num_vehicles // num_lanes):
             # create random permutation of lane indices for this batch of vehicles
             lane_indices = self.np_random.permutation(num_lanes)
-            
+          
             for lane_index in lane_indices:
                 # spawn a vehicle in the current lane
                 lane = lanes[lane_index]
@@ -277,7 +277,7 @@ class ContinuousHighwayEnv(AbstractEnv):
                 random_speed = speed + self.np_random.uniform(-0.1, 0.1)  # Add some randomness to the speed of vehicles in the slalom traffic to make it more dynamic and less predictable
 
                 counter += 1
-                vehicle = IDMVehicle(self.road, lane.position(x, 0), lane.heading_at(0), random_speed)
+                vehicle = IDMVehicle(self.road, lane.position(x, 0), lane.heading_at(0), random_speed, enable_lane_change=False)  # Vehicles in the slalom traffic cannot change lane, to foster the idea of a "slalom"
                 self.road.vehicles.append(vehicle)
 
     def _slalom_traffic(self):
@@ -308,17 +308,15 @@ class ContinuousHighwayEnv(AbstractEnv):
         num_lanes = self.config["lanes_count"]
         lanes = self.road.network.lanes_list()
 
-        num_vehicles = 16
+        num_vehicles = 15
         ego_position = self.vehicle.position
-        distance = 40
+        distance = 30
         speed = self.config["other_speed_range"][0]  # All vehicles in the slalom traffic have the same speed
         counter = 0
-        for i in range(num_vehicles // (2 * num_lanes)):
-            # create random permutation of lane indices for this batch of vehicles
-            lane_indices = self.np_random.permutation(num_lanes)
-            
-            for lane_index in lane_indices:
-                # spawn a pair of vehicles in the current lane
+        for i in range(num_vehicles // 3):
+
+                # spawn a pair of vehicles
+                lane_index = self.np_random.choice(num_lanes)
                 lane1 = lanes[lane_index]
                 lane2 = lanes[(lane_index - 1) % num_lanes]  # Get the previous lane (wrap around to the last lane if necessary)
 
@@ -326,10 +324,21 @@ class ContinuousHighwayEnv(AbstractEnv):
                 x1 += distance + counter * distance  # space out vehicles by a certain distance
                 x1 += self.np_random.uniform(-5, 5)  # Add some randomness to the position of vehicles in the pairs traffic to make it more dynamic and less predictable
 
-                x2 = x1 + self.np_random.uniform(-1, 10)  # The second vehicle in the pair is spawned a bit ahead of the first one, with some randomness to make it more dynamic and less predictable
+                x2 = x1 + self.np_random.uniform(-5, 5)  # The second vehicle in the pair is spawned a bit ahead of the first one, with some randomness to make it more dynamic and less predictable
 
                 counter += 1
-                vehicle1 = IDMVehicle(self.road, lane1.position(x1, 0), lane1.heading_at(0), speed)
-                vehicle2 = IDMVehicle(self.road, lane2.position(x2, 0), lane2.heading_at(0), speed)
+                vehicle1 = IDMVehicle(self.road, lane1.position(x1, 0), lane1.heading_at(0), speed, enable_lane_change=False)  # The first vehicle in the pair cannot change lane, to foster the idea of a "pair"
+                vehicle2 = IDMVehicle(self.road, lane2.position(x2, 0), lane2.heading_at(0), speed, enable_lane_change=False)  # The second vehicle in the pair cannot change lane, to foster the idea of a "pair"
                 self.road.vehicles.append(vehicle1)
                 self.road.vehicles.append(vehicle2)
+
+                # spawn a single vehicle
+                lane_index = self.np_random.choice(num_lanes)
+                lane = lanes[lane_index]
+
+                x = lane.position(ego_position[0], ego_position[1])[0]  # spawn behind the ego vehicle
+                x += distance + counter * distance  # space out vehicles by a certain distance
+                x += self.np_random.uniform(-10, 10)  # Add some randomness to the position of vehicles in the pairs traffic to make it more dynamic and less predictable
+                counter += 1
+                vehicle = IDMVehicle(self.road, lane.position(x, 0), lane.heading_at(0), speed, enable_lane_change=False)  # Vehicles in the pairs traffic cannot change lane, to foster the idea of a "pair"
+                self.road.vehicles.append(vehicle)
