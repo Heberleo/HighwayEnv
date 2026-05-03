@@ -10,6 +10,7 @@ from highway_env.envs.common.action import Action
 from highway_env.road import lane
 from highway_env.road.road import Road, RoadNetwork
 from highway_env.utils import near_split
+from highway_env.vehicle.behavior import IDMVehicle
 from highway_env.vehicle.kinematics import Vehicle
 
 class ContinuousHighwayEnv(AbstractEnv):
@@ -77,7 +78,7 @@ class ContinuousHighwayEnv(AbstractEnv):
     def _create_road(self):
         """Create a road composed of straight adjacent lanes."""
         self.road = Road(
-            network=RoadNetwork.straight_road_network(self.config["lanes_count"]),
+            network=RoadNetwork.straight_road_network(self.config["lanes_count"], speed_limit=15),
             np_random=self.np_random
         )
 
@@ -103,6 +104,8 @@ class ContinuousHighwayEnv(AbstractEnv):
             return  # No traffic to add
         elif self.config["traffic"] == "slalom":
             self._slalom_traffic()  # Add some traffic to make the environment more realistic and challenging
+        elif self.config["traffic"] == "dynamic_slalom":
+            self._dynamic_slalom_traffic()  # Add some traffic to make the environment more realistic and challenging
 
     def step(self, action: Action) -> tuple[np.ndarray, float, bool, bool, dict]:
         """
@@ -209,6 +212,32 @@ class ContinuousHighwayEnv(AbstractEnv):
         
         return heading_penalty, lateral_penalty
     
+    def _dynamic_slalom_traffic(self):
+        num_lanes = self.config["lanes_count"]
+        lanes = self.road.network.lanes_list()
+
+        num_vehicles = 16
+        ego_position = self.vehicle.position
+        distance = 30
+        speed_range = self.config["other_speed_range"]  # All vehicles in the slalom traffic have the same speed
+        counter = 0
+        for i in range(num_vehicles // num_lanes):
+            # create random permutation of lane indices for this batch of vehicles
+            lane_indices = self.np_random.permutation(num_lanes)
+            
+            for lane_index in lane_indices:
+                # spawn a vehicle in the current lane
+                lane = lanes[lane_index]
+                x = lane.position(ego_position[0], ego_position[1])[0]  # spawn behind the ego vehicle
+                x += distance + counter * distance  # space out vehicles by a certain distance
+                x += self.np_random.uniform(-5, 5)  # Add some randomness to the position of vehicles in the slalom traffic to make it more dynamic and less predictable
+                
+                random_speed = float(self.np_random.uniform(*speed_range))
+
+                counter += 1
+                vehicle = IDMVehicle(self.road, lane.position(x, 0), lane.heading_at(0), random_speed)
+                self.road.vehicles.append(vehicle)
+
     def _slalom_traffic(self):
         num_lanes = self.config["lanes_count"]
         lanes = self.road.network.lanes_list()
