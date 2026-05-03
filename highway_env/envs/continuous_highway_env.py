@@ -104,8 +104,8 @@ class ContinuousHighwayEnv(AbstractEnv):
             return  # No traffic to add
         elif self.config["traffic"] == "slalom":
             self._slalom_traffic()  # Add some traffic to make the environment more realistic and challenging
-        elif self.config["traffic"] == "dynamic_slalom":
-            self._dynamic_slalom_traffic()  # Add some traffic to make the environment more realistic and challenging
+        elif self.config["traffic"] == "dense_slalom":
+            self._dense_slalom_traffic()  # Add some traffic to make the environment more realistic and challenging
 
     def step(self, action: Action) -> tuple[np.ndarray, float, bool, bool, dict]:
         """
@@ -212,14 +212,14 @@ class ContinuousHighwayEnv(AbstractEnv):
         
         return heading_penalty, lateral_penalty
     
-    def _dynamic_slalom_traffic(self):
+    def _dense_slalom_traffic(self):
         num_lanes = self.config["lanes_count"]
         lanes = self.road.network.lanes_list()
 
         num_vehicles = 16
         ego_position = self.vehicle.position
-        distance = 30
-        speed_range = self.config["other_speed_range"]  # All vehicles in the slalom traffic have the same speed
+        distance = 20
+        speed = self.config["other_speed_range"][0]  # All vehicles in the slalom traffic have the same speed
         counter = 0
         for i in range(num_vehicles // num_lanes):
             # create random permutation of lane indices for this batch of vehicles
@@ -232,7 +232,7 @@ class ContinuousHighwayEnv(AbstractEnv):
                 x += distance + counter * distance  # space out vehicles by a certain distance
                 x += self.np_random.uniform(-5, 5)  # Add some randomness to the position of vehicles in the slalom traffic to make it more dynamic and less predictable
                 
-                random_speed = float(self.np_random.uniform(*speed_range))
+                random_speed = speed + self.np_random.uniform(-0.1, 0.1)  # Add some randomness to the speed of vehicles in the slalom traffic to make it more dynamic and less predictable
 
                 counter += 1
                 vehicle = IDMVehicle(self.road, lane.position(x, 0), lane.heading_at(0), random_speed)
@@ -256,6 +256,8 @@ class ContinuousHighwayEnv(AbstractEnv):
                 lane = lanes[lane_index]
                 x = lane.position(ego_position[0], ego_position[1])[0]  # spawn behind the ego vehicle
                 x += distance + counter * distance  # space out vehicles by a certain distance
+                x += self.np_random.uniform(-5, 5)
+
                 counter += 1
                 vehicle = Vehicle(self.road, lane.position(x, 0), lane.heading_at(0), speed)
                 self.road.vehicles.append(vehicle)
