@@ -106,6 +106,8 @@ class ContinuousHighwayEnv(AbstractEnv):
             self._slalom_traffic()  # Add some traffic to make the environment more realistic and challenging
         elif self.config["traffic"] == "dense_slalom":
             self._dense_slalom_traffic()  # Add some traffic to make the environment more realistic and challenging
+        elif self.config["traffic"] == "pairs":
+            self._pairs_traffic()  # Add some traffic to make the environment more realistic and challenging
 
     def step(self, action: Action) -> tuple[np.ndarray, float, bool, bool, dict]:
         """
@@ -122,18 +124,58 @@ class ContinuousHighwayEnv(AbstractEnv):
 
         self.time += 1 / self.config["policy_frequency"]
 
+        action = self._disturb_action(action)
         self._simulate(action)
         
         obs = self.observation_type.observe()
+        obs = self._disturb_observation(obs)
+
         reward = self._reward(action)
         terminated = self._is_terminated()
         truncated = self._is_truncated()
         info = self._info(obs, action)
+        info["true_observation"] = obs
         if self.render_mode == "human":
             self.render()
 
         return obs, reward, terminated, truncated, info
     
+    def _disturb_action(self, action: Action) -> Action:
+
+        """
+        Action Disturbances:
+
+        - lateral/ longitudinal wind: A constant bias can be added to the steering/acceleration action to 
+        simulate the effect of wind pushing.
+
+        - steering/ acceleration factor: The actual steering/ acceleration applied can be a scaled version 
+        of the action taken by the agent, simulating a situation where the vehicle is more or less 
+        responsive to control inputs.
+
+        """
+        lateral_wind = self.config.get("lateral_wind", 0.0)
+        longitudinal_wind = self.config.get("longitudinal_wind", 0.0)
+        steering_factor = self.config.get("steering_factor", 1.0)
+        acceleration_factor = self.config.get("acceleration_factor", 1.0)
+
+
+        return action
+    
+    def _disturb_observation(self, observation: np.ndarray) -> np.ndarray:
+
+        """
+        Observation Disturbances:
+
+        - scale: The observed values can be scaled to simulate sensor calibration issues.
+
+        - offset: A constant offset can be added to the observed values to simulate sensor bias.
+
+        - distortion: The observed values can be distorted using a non-linear function to simulate sensor distortion.
+
+        """
+
+
+        return observation
 
     def _reward(self, action):
         """
@@ -261,3 +303,33 @@ class ContinuousHighwayEnv(AbstractEnv):
                 counter += 1
                 vehicle = Vehicle(self.road, lane.position(x, 0), lane.heading_at(0), speed)
                 self.road.vehicles.append(vehicle)
+
+    def _pairs_traffic(self):
+        num_lanes = self.config["lanes_count"]
+        lanes = self.road.network.lanes_list()
+
+        num_vehicles = 16
+        ego_position = self.vehicle.position
+        distance = 40
+        speed = self.config["other_speed_range"][0]  # All vehicles in the slalom traffic have the same speed
+        counter = 0
+        for i in range(num_vehicles // (2 * num_lanes)):
+            # create random permutation of lane indices for this batch of vehicles
+            lane_indices = self.np_random.permutation(num_lanes)
+            
+            for lane_index in lane_indices:
+                # spawn a pair of vehicles in the current lane
+                lane1 = lanes[lane_index]
+                lane2 = lanes[(lane_index - 1) % num_lanes]  # Get the previous lane (wrap around to the last lane if necessary)
+
+                x1 = lane1.position(ego_position[0], ego_position[1])[0]  # spawn behind the ego vehicle
+                x1 += distance + counter * distance  # space out vehicles by a certain distance
+                x1 += self.np_random.uniform(-5, 5)  # Add some randomness to the position of vehicles in the pairs traffic to make it more dynamic and less predictable
+
+                x2 = x1 + self.np_random.uniform(-1, 10)  # The second vehicle in the pair is spawned a bit ahead of the first one, with some randomness to make it more dynamic and less predictable
+
+                counter += 1
+                vehicle1 = IDMVehicle(self.road, lane1.position(x1, 0), lane1.heading_at(0), speed)
+                vehicle2 = IDMVehicle(self.road, lane2.position(x2, 0), lane2.heading_at(0), speed)
+                self.road.vehicles.append(vehicle1)
+                self.road.vehicles.append(vehicle2)
