@@ -213,6 +213,8 @@ class ContinuousHighwayEnv(AbstractEnv):
         num_lanes = self.config["lanes_count"]
         lanes = self.road.network.lanes_list()
 
+        ego_lane_index = self.vehicle.lane_index[2]
+
         num_vehicles = 8
         ego_position = self.vehicle.position
         distance = 30
@@ -221,6 +223,9 @@ class ContinuousHighwayEnv(AbstractEnv):
         for i in range(num_vehicles // num_lanes):
             # create random permutation of lane indices for this batch of vehicles
             lane_indices = self.np_random.permutation(num_lanes)
+            while lane_indices[0] != ego_lane_index:  
+                lane_indices = np.roll(lane_indices, -1)  # Rotate the array until
+ 
             for lane_index in lane_indices:
                 # spawn a vehicle in the current lane
                 lane = lanes[lane_index]
