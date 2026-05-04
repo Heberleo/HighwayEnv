@@ -43,7 +43,7 @@ class ContinuousHighwayEnv(AbstractEnv):
                 "scaling": 7,
                 "centering_position": [0.3, 0.5],
 
-                "max_speed": 12,  # [m/s]
+                "max_speed": 10,  # [m/s]
 
                 "duration": 40,  # [s]
 
