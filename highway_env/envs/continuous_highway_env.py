@@ -37,7 +37,7 @@ class ContinuousHighwayEnv(AbstractEnv):
                     "dynamical": False,
                 },
                 "simulation_frequency": 10,
-                "policy_frequency": 10,
+                "policy_frequency": 5,
                 "screen_width": 1200,
                 "screen_height": 300,
                 "scaling": 7,
@@ -50,6 +50,7 @@ class ContinuousHighwayEnv(AbstractEnv):
                 "ego_initial_speed": 7.0,
                 "reward_speed_range": [5, 10],
                 "penalty_speed_range": [0, 5],
+                "speeding_range": [10, 15],
 
                 # road and traffic
                 "traffic": None,
@@ -60,6 +61,7 @@ class ContinuousHighwayEnv(AbstractEnv):
                 "initial_heading": None,  # If None, the lane heading is used, if "random", a random heading is sampled
 
                 "right_lane_reward": 0.0,  # Reward for being in the rightmost lane
+                "speeding_penalty": -0.2,  # Penalty for driving above the speed limit
                 "high_speed_reward": 0.2,  # Reward for driving at high speed
                 "low_speed_penalty": -0.2,  # Penalty for driving at low speed
                 "collision_reward": -1.0,  # Penalty for collisions
@@ -226,6 +228,10 @@ class ContinuousHighwayEnv(AbstractEnv):
     
         heading_penalty, lateral_penalty = self._lane_penalties()
 
+        speeding = utils.lmap(
+            forward_speed, self.config["speeding_range"], [0, 1]
+        )
+
         return {
             "collision_reward": float(self.vehicle.crashed),
             "right_lane_reward": lane / max(len(neighbours) - 1, 1),
@@ -233,7 +239,8 @@ class ContinuousHighwayEnv(AbstractEnv):
             "low_speed_penalty": np.clip(low_scaled_speed, 0, 1),
             "off_road_penalty": float(not self.vehicle.on_road),
             "heading_penalty": heading_penalty,
-            "lateral_penalty": lateral_penalty  # Penalize being in the leftmost or rightmost lane to foster lane keeping
+            "lateral_penalty": lateral_penalty,  # Penalize being in the leftmost or rightmost lane to foster lane keeping
+            "speeding_penalty": np.clip(speeding, 0, 1)  # Penalize driving above the speed limit
         }
     
     def _lane_penalties(self) -> tuple[float, float]:
