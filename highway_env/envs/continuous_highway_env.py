@@ -110,9 +110,12 @@ class ContinuousHighwayEnv(AbstractEnv):
         if self.config["traffic"] is None:
             return  # No traffic to add
         elif self.config["traffic"] == "slalom":
-            self._slalom_traffic()  # Add some traffic to make the environment more realistic and challenging
+            self._slalom_traffic() 
         elif self.config["traffic"] == "dense_slalom":
-            self._dense_slalom_traffic()  # Add some traffic to make the environment more realistic and challenging
+            if self.np_random.uniform() < 0.75:  
+                self._dense_slalom_traffic()  
+            else:
+                self._slalom_traffic() 
 
     def step(self, action: Action) -> tuple[np.ndarray, float, bool, bool, dict]:
         """
@@ -273,9 +276,6 @@ class ContinuousHighwayEnv(AbstractEnv):
         lateral_distance = lane.distance(self.vehicle.position)
         width = lane.width_at(longitudinal)
         lateral_penalty = (lateral_distance / (width / 2))
-
-        if abs(angle_diff) > 0.1: # apply no lateral penalty if the vehicle is turning (> 5 degrees), so active lane changes are not penalized
-           lateral_penalty = 0.0
         
         return heading_penalty, lateral_penalty
     
@@ -291,6 +291,8 @@ class ContinuousHighwayEnv(AbstractEnv):
 
         max_rows = num_vehicles // 2
         rows = self.np_random.choice(max_rows)  
+
+        pair_probability = 0.75  # Probability of spawning a pair of vehicles in adjacent lanes
 
         while counter < rows:
             # create random permutation of lane indices for this batch of vehicles
@@ -309,12 +311,13 @@ class ContinuousHighwayEnv(AbstractEnv):
                 vehicle = Vehicle(self.road, lane.position(x, 0), lane.heading_at(0), random_speed)  # Vehicles in the slalom traffic cannot change lane, to foster the idea of a "slalom"
                 self.road.vehicles.append(vehicle)
 
-                adjacent_lane_index = (lane_index + 1) % num_lanes  # Get the adjacent lane index (wrap around)
-                adjacent_lane = lanes[adjacent_lane_index]
-                x_adjacent = x + self.np_random.uniform(5, 10)  # Add some randomness to the position of vehicles in the slalom traffic to make it more dynamic and less predictable
+                if self.np_random.uniform() < pair_probability:  # Spawn a pair of vehicles in adjacent lanes with a certain probability to create more challenging traffic patterns
+                    adjacent_lane_index = (lane_index + 1) % num_lanes  # Get the adjacent lane index (wrap around)
+                    adjacent_lane = lanes[adjacent_lane_index]
+                    x_adjacent = x + self.np_random.uniform(5, 10)  # Add some randomness to the position of vehicles in the slalom traffic to make it more dynamic and less predictable
 
-                vehicle_adjacent = Vehicle(self.road, adjacent_lane.position(x_adjacent, 0), adjacent_lane.heading_at(0), random_speed)  # Vehicles in the slalom traffic cannot change lane, to foster the idea of a "slalom"
-                self.road.vehicles.append(vehicle_adjacent)
+                    vehicle_adjacent = Vehicle(self.road, adjacent_lane.position(x_adjacent, 0), adjacent_lane.heading_at(0), random_speed)  # Vehicles in the slalom traffic cannot change lane, to foster the idea of a "slalom"
+                    self.road.vehicles.append(vehicle_adjacent)
 
                 if counter >= rows:
                     break
