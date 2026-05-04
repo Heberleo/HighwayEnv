@@ -56,7 +56,7 @@ class ContinuousHighwayEnv(AbstractEnv):
                 "traffic": None,
                 "lanes_count": 4,
                 "vehicles_count": 10,
-                "other_speed_range": [5, 10],
+                "others_speed_range": [5, 10],
                 "initial_lane_id": None,  # If None, a random lane is sampled
                 "initial_heading": None,  # If None, the lane heading is used, if "random", a random heading is sampled
 
@@ -286,7 +286,7 @@ class ContinuousHighwayEnv(AbstractEnv):
         num_vehicles = 16
         ego_position = self.vehicle.position
         distance = 40
-        speed = self.np_random.uniform(*self.config["other_speed_range"])  # Random speed for vehicles in the dense slalom traffic to create more diverse traffic patterns
+        speed = self.np_random.uniform(*self.config["others_speed_range"])  # Random speed for vehicles in the dense slalom traffic to create more diverse traffic patterns
         counter = 0
 
         max_rows = num_vehicles // 2
@@ -339,7 +339,7 @@ class ContinuousHighwayEnv(AbstractEnv):
         num_vehicles = 8
         ego_position = self.vehicle.position
         distance = 30
-        speed = self.np_random.uniform(*self.config["other_speed_range"])  # Random speed for vehicles in the slalom traffic to create more diverse traffic patterns
+        speed = self.np_random.uniform(*self.config["others_speed_range"])  # Random speed for vehicles in the slalom traffic to create more diverse traffic patterns
         counter = 0
         for i in range(num_vehicles // num_lanes):
             # create random permutation of lane indices for this batch of vehicles
