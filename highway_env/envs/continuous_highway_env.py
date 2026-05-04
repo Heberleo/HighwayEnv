@@ -9,7 +9,7 @@ from highway_env.envs.common.abstract import AbstractEnv
 from highway_env.envs.common.action import Action
 from highway_env.road import lane
 from highway_env.road.road import Road, RoadNetwork
-from highway_env.utils import near_split
+from highway_env.utils import lmap, near_split
 from highway_env.vehicle.behavior import IDMVehicle
 from highway_env.vehicle.kinematics import Vehicle
 
@@ -30,8 +30,8 @@ class ContinuousHighwayEnv(AbstractEnv):
                 },
                 "action": {
                     "type": "ContinuousAction",
-                    "steering_range": [-0.15, 0.15],
-                    "acceleration_range": [-7.5, 2.5],
+                    "steering_range": [-np.pi / 4, np.pi / 4],
+                    "acceleration_range": [-5, 5],
                     "longitudinal": True,
                     "lateral": True,
                     "dynamical": False,
@@ -153,11 +153,19 @@ class ContinuousHighwayEnv(AbstractEnv):
         responsive to control inputs.
 
         """
-        lateral_wind = self.config.get("lateral_wind", 0.0)
-        longitudinal_wind = self.config.get("longitudinal_wind", 0.0)
+        steering_offset = self.config.get("steering_offset", 0.0)
+        acceleration_offset = self.config.get("acceleration_offset", 0.0)
         steering_factor = self.config.get("steering_factor", 1.0)
         acceleration_factor = self.config.get("acceleration_factor", 1.0)
 
+        # map offsets to [-1, 1] range, so that they can be added to the action which is in this range
+        steering_offset = lmap(steering_offset, self.action_type.steering_range, [-1, 1])
+        acceleration_offset = lmap(acceleration_offset, self.action_type.acceleration_range, [-1, 1]) - lmap(0., self.action_type.acceleration_range, [-1, 1]) # accomodate for asymmetric acceleration range
+
+        disturbed_steering = np.clip(action[1] * steering_factor + steering_offset, -1, 1)
+        disturbed_acceleration = np.clip(action[0] * acceleration_factor + acceleration_offset, -1, 1)
+
+        action = np.array([disturbed_acceleration, disturbed_steering])
 
         return action
     
@@ -302,43 +310,4 @@ class ContinuousHighwayEnv(AbstractEnv):
 
                 counter += 1
                 vehicle = Vehicle(self.road, lane.position(x, 0), lane.heading_at(0), speed)
-                self.road.vehicles.append(vehicle)
-
-    def _pairs_traffic(self):
-        num_lanes = self.config["lanes_count"]
-        lanes = self.road.network.lanes_list()
-
-        num_vehicles = 15
-        ego_position = self.vehicle.position
-        distance = 30
-        speed = self.config["other_speed_range"][0]  # All vehicles in the slalom traffic have the same speed
-        counter = 0
-        for i in range(num_vehicles // 3):
-
-                # spawn a pair of vehicles
-                lane_index = self.np_random.choice(num_lanes)
-                lane1 = lanes[lane_index]
-                lane2 = lanes[(lane_index - 1) % num_lanes]  # Get the previous lane (wrap around to the last lane if necessary)
-
-                x1 = lane1.position(ego_position[0], ego_position[1])[0]  # spawn behind the ego vehicle
-                x1 += distance + counter * distance  # space out vehicles by a certain distance
-                x1 += self.np_random.uniform(-5, 5)  # Add some randomness to the position of vehicles in the pairs traffic to make it more dynamic and less predictable
-
-                x2 = x1 + self.np_random.uniform(-5, 5)  # The second vehicle in the pair is spawned a bit ahead of the first one, with some randomness to make it more dynamic and less predictable
-
-                counter += 1
-                vehicle1 = IDMVehicle(self.road, lane1.position(x1, 0), lane1.heading_at(0), speed, enable_lane_change=False)  # The first vehicle in the pair cannot change lane, to foster the idea of a "pair"
-                vehicle2 = IDMVehicle(self.road, lane2.position(x2, 0), lane2.heading_at(0), speed, enable_lane_change=False)  # The second vehicle in the pair cannot change lane, to foster the idea of a "pair"
-                self.road.vehicles.append(vehicle1)
-                self.road.vehicles.append(vehicle2)
-
-                # spawn a single vehicle
-                lane_index = self.np_random.choice(num_lanes)
-                lane = lanes[lane_index]
-
-                x = lane.position(ego_position[0], ego_position[1])[0]  # spawn behind the ego vehicle
-                x += distance + counter * distance  # space out vehicles by a certain distance
-                x += self.np_random.uniform(-10, 10)  # Add some randomness to the position of vehicles in the pairs traffic to make it more dynamic and less predictable
-                counter += 1
-                vehicle = IDMVehicle(self.road, lane.position(x, 0), lane.heading_at(0), speed, enable_lane_change=False)  # Vehicles in the pairs traffic cannot change lane, to foster the idea of a "pair"
                 self.road.vehicles.append(vehicle)
