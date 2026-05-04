@@ -47,13 +47,6 @@ class Vehicle(RoadObject):
         self.log = []
         self.history = deque(maxlen=self.HISTORY_SIZE)
 
-        self.acceleration_offset = 0
-        self.steering_offset = 0
-
-    def set_action_offsets(self, acceleration_offset: float, steering_offset: float) -> None:
-        self.acceleration_offset = acceleration_offset
-        self.steering_offset = steering_offset
-
     @classmethod
     def create_random(
         cls,
@@ -233,7 +226,7 @@ class Vehicle(RoadObject):
 
     def step(self, dt: float) -> None:
         """
-        Propagate the vehicle state given its actions (including possible action offsets).
+        Propagate the vehicle state given its actions.
         
         Integrate a modified bicycle model with a 1st-order response on the steering wheel dynamics.
         If the vehicle is crashed, the actions are overridden with erratic steering and braking until complete stop.
@@ -242,7 +235,7 @@ class Vehicle(RoadObject):
         :param dt: timestep of integration of the model [s]
         """
         self.clip_actions()
-        delta_f = self.action["steering"] + self.steering_offset
+        delta_f = self.action["steering"]
         beta = np.arctan(1 / 2 * np.tan(delta_f))
         v = self.speed * np.array(
             [np.cos(self.heading + beta), np.sin(self.heading + beta)]
@@ -253,7 +246,7 @@ class Vehicle(RoadObject):
             self.crashed = True
             self.impact = None
         self.heading += self.speed * np.sin(beta) / (self.LENGTH / 2) * dt
-        self.speed += (self.action["acceleration"] + self.acceleration_offset) * dt
+        self.speed += (self.action["acceleration"]) * dt
         self.on_state_update()
 
     def clip_actions(self) -> None:
