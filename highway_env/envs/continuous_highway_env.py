@@ -67,7 +67,8 @@ class ContinuousHighwayEnv(AbstractEnv):
                 "collision_reward": -1.0,  # Penalty for collisions
                 "heading_penalty": -2.0,  # Penalty for heading deviation from lane direction
                 "lateral_penalty": -0.5,  # Penalty for being far from the lane center
-                "off_road_penalty": -1.0  # Penalty for being off the road 
+                "off_road_penalty": -1.0,  # Penalty for being off the road 
+                "acceleration_penalty": -0.1,  # Penalty for high acceleration to foster smooth driving
             }
         )
         return config
@@ -236,6 +237,9 @@ class ContinuousHighwayEnv(AbstractEnv):
             forward_speed, self.config["speeding_range"], [0, 1]
         )
 
+        acceleration = action[0] # Acceleration action is in range [-1, 1], where -1 corresponds to max deceleration and 1 to max acceleration
+        acceleration_punished = np.clip(acceleration, 0, 1)  ** 2  # Only penalize positive acceleration, square it to have a stronger penalty for higher accelerations
+
         return {
             "collision_reward": float(self.vehicle.crashed),
             "right_lane_reward": lane / max(len(neighbours) - 1, 1),
@@ -244,7 +248,8 @@ class ContinuousHighwayEnv(AbstractEnv):
             "off_road_penalty": float(not self.vehicle.on_road),
             "heading_penalty": heading_penalty,
             "lateral_penalty": lateral_penalty,  # Penalize being in the leftmost or rightmost lane to foster lane keeping
-            "speeding_penalty": np.clip(speeding, 0, 1)  # Penalize driving above the speed limit
+            "speeding_penalty": np.clip(speeding, 0, 1),  # Penalize driving above the speed limit
+            "acceleration_penalty": acceleration_punished  # Penalize high acceleration to foster smooth driving
         }
     
     def _lane_penalties(self) -> tuple[float, float]:
