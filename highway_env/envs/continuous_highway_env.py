@@ -236,7 +236,7 @@ class ContinuousHighwayEnv(AbstractEnv):
         )
 
         acceleration = action[0] # Acceleration action is in range [-1, 1], where -1 corresponds to max deceleration and 1 to max acceleration
-        acceleration_punished = np.clip(acceleration, 0, 1)  ** 2  # Only penalize positive acceleration, square it to have a stronger penalty for higher accelerations
+        acceleration_punished = np.clip(acceleration, 0, 1) # Only penalize positive acceleration, square it to have a stronger penalty for higher accelerations
 
         return {
             "collision_reward": float(self.vehicle.crashed),
