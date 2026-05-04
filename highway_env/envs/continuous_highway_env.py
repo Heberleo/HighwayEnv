@@ -43,7 +43,7 @@ class ContinuousHighwayEnv(AbstractEnv):
                 "scaling": 7,
                 "centering_position": [0.3, 0.5],
 
-
+                "max_speed": 10,  # [m/s]
 
                 "duration": 40,  # [s]
 
@@ -61,7 +61,7 @@ class ContinuousHighwayEnv(AbstractEnv):
                 "initial_heading": None,  # If None, the lane heading is used, if "random", a random heading is sampled
 
                 "right_lane_reward": 0.0,  # Reward for being in the rightmost lane
-                "speeding_penalty": -0.2,  # Penalty for driving above the speed limit
+                "speeding_penalty": -0.0,  # Penalty for driving above the speed limit
                 "high_speed_reward": 0.2,  # Reward for driving at high speed
                 "low_speed_penalty": -0.2,  # Penalty for driving at low speed
                 "collision_reward": -1.0,  # Penalty for collisions
@@ -98,6 +98,10 @@ class ContinuousHighwayEnv(AbstractEnv):
         vehicle = self.action_type.vehicle_class(
             self.road, vehicle.position, heading, vehicle.speed
         )
+
+        # Cap ego vehicles speed 
+        vehicle.MAX_SPEED = self.config["max_speed"]  
+        vehicle.MIN_SPEED = -self.config["max_speed"]
 
         self.road.vehicles.append(vehicle)
         self.vehicle = vehicle
