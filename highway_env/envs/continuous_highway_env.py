@@ -276,7 +276,7 @@ class ContinuousHighwayEnv(AbstractEnv):
         width = lane.width_at(longitudinal)
         lateral_penalty = (lateral_distance / (width / 2))
 
-        if abs(angle_diff) > 0.1: # apply no lateral penalty if the vehicle is turning, so active lane changes are not penalized
+        if abs(angle_diff) > 0.2: # apply no lateral penalty if the vehicle is turning (> 11 degrees), so active lane changes are not penalized
            lateral_penalty = 0.0
         
         return heading_penalty, lateral_penalty
@@ -287,7 +287,7 @@ class ContinuousHighwayEnv(AbstractEnv):
 
         num_vehicles = 16
         ego_position = self.vehicle.position
-        distance = 20
+        distance = 30
         speed = self.config["other_speed_range"][0]  # All vehicles in the slalom traffic have the same speed
         counter = 0
         for i in range(num_vehicles // num_lanes):
@@ -306,6 +306,13 @@ class ContinuousHighwayEnv(AbstractEnv):
                 counter += 1
                 vehicle = Vehicle(self.road, lane.position(x, 0), lane.heading_at(0), random_speed)  # Vehicles in the slalom traffic cannot change lane, to foster the idea of a "slalom"
                 self.road.vehicles.append(vehicle)
+
+                adjacent_lane_index = (lane_index + 1) % num_lanes  # Get the adjacent lane index (wrap around)
+                adjacent_lane = lanes[adjacent_lane_index]
+                x_adjacent = x + self.np_random.uniform(2.5, 7.5)  # Add some randomness to the position of vehicles in the slalom traffic to make it more dynamic and less predictable
+
+                vehicle_adjacent = Vehicle(self.road, adjacent_lane.position(x_adjacent, 0), adjacent_lane.heading_at(0), random_speed)  # Vehicles in the slalom traffic cannot change lane, to foster the idea of a "slalom"
+                self.road.vehicles.append(vehicle_adjacent)
 
     def _slalom_traffic(self):
         num_lanes = self.config["lanes_count"]
