@@ -113,7 +113,7 @@ class ContinuousHighwayEnv(AbstractEnv):
         elif self.config["traffic"] == "slalom":
             self._slalom_traffic() 
         elif self.config["traffic"] == "dense_slalom":
-            if self.np_random.uniform() < 0.75:  
+            if self.np_random.uniform() < 0.85:  
                 self._dense_slalom_traffic()  
             else:
                 self._slalom_traffic() 
@@ -376,8 +376,29 @@ class ContinuousHighwayEnv(AbstractEnv):
 
 
     def _random_traffic(self):
-        num_vehicles = 20
+        num_lanes = self.config["lanes_count"]
+        lanes = self.road.network.lanes_list()
+        ego_position = self.vehicle.position
+        distance = 25
+
+        num_vehicles = 30
         density = 0.5
+
+        lane_indices = self.np_random.permutation(num_lanes)
+        counter = 0
+        # create random permutation of lane indices for this batch of vehicles
+        for lane_index in lane_indices:
+            # spawn a vehicle in the current lane
+            lane = lanes[lane_index]
+            x = lane.position(ego_position[0], ego_position[1])[0]  # spawn behind the ego vehicle
+            x += distance + counter * distance  # space out vehicles by a certain distance
+            x += self.np_random.uniform(-10, 10)
+
+            counter += 1
+            speed = self.np_random.uniform(*self.config["others_speed_range"])
+            vehicle = IDMVehicle(self.road, lane.position(x, 0), lane.heading_at(0), speed)
+            vehicle.enable_lane_change = False  # Make some vehicles in the random traffic unable to change lane to create more stable traffic patterns
+            self.road.vehicles.append(vehicle)
     
         for _ in range(num_vehicles):       
             speed = self.np_random.uniform(*self.config["others_speed_range"])  # Random speed for vehicles in the random traffic to create more diverse traffic patterns
@@ -387,5 +408,4 @@ class ContinuousHighwayEnv(AbstractEnv):
                 speed=speed
             )
             vehicle.randomize_behavior()
-            # vehicle.enable_lane_change = False  # Vehicles in the random traffic cannot change lane to create more stable traffic patterns
             self.road.vehicles.append(vehicle)
