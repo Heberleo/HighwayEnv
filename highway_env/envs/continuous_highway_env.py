@@ -63,6 +63,7 @@ class ContinuousHighwayEnv(AbstractEnv):
                 "right_lane_reward": 0.0,  # Reward for being in the rightmost lane
                 "speeding_penalty": -0.2,  # Penalty for driving above the speed limit
                 "high_speed_reward": 0.2,  # Reward for driving at high speed
+                "trailing_penalty": -0.2,  # Penalty for being too close to the front vehicle
                 "low_speed_penalty": -0.2,  # Penalty for driving at low speed
                 "collision_reward": -1.0,  # Penalty for collisions
                 "heading_penalty": -2.0,  # Penalty for heading deviation from lane direction
@@ -232,7 +233,7 @@ class ContinuousHighwayEnv(AbstractEnv):
         )
         low_scaled_speed = 1 - low_scaled_speed  # We want a penalty for low speeds, so we invert the scale
     
-        heading_penalty, lateral_penalty = self._lane_penalties()
+        heading_penalty, lateral_penalty, trailing_penalty = self._lane_penalties()
 
         speeding = utils.lmap(
             forward_speed, self.config["speeding_range"], [0, 1]
@@ -250,10 +251,11 @@ class ContinuousHighwayEnv(AbstractEnv):
             "heading_penalty": heading_penalty,
             "lateral_penalty": lateral_penalty,  # Penalize being in the leftmost or rightmost lane to foster lane keeping
             "speeding_penalty": np.clip(speeding, 0, 1),  # Penalize driving above the speed limit
-            "acceleration_penalty": acceleration_punished  # Penalize high acceleration to foster smooth driving
+            "acceleration_penalty": acceleration_punished,  # Penalize high acceleration to foster smooth driving
+            "trailing_penalty": trailing_penalty  # Penalize being too close to the vehicle ahead
         }
-    
-    def _lane_penalties(self) -> tuple[float, float]:
+
+    def _lane_penalties(self) -> tuple[float, float, float]:
         # 1. Get raw angles (in radians)
         vehicle_heading = self.vehicle.heading
         
@@ -279,8 +281,17 @@ class ContinuousHighwayEnv(AbstractEnv):
 
         if abs(angle_diff) > 0.1: # apply no lateral penalty if the vehicle is turning
            lateral_penalty = 0.0
+
+        trailing_penalty = 0.0
+        vehicle_ahead = self.road.neighbour_vehicles(self.vehicle, lane_index=self.vehicle.lane_index)[0]
+        if vehicle_ahead is not None:
+            distance = self.vehicle.lane_distance_to(vehicle_ahead)
+
+            if distance < 10 and abs(angle_diff) < 0.1: # trailing penalty unless the vehicle is turning, in which case we assume it is performing a lane change and we don't want to penalize it for being close to the front vehicle
+                trailing_penalty = (10 - distance) / 10  # Linear penalty that increases as the vehicle gets closer to the front vehicle, maxing out at a distance of 0
         
-        return heading_penalty, lateral_penalty
+        
+        return heading_penalty, lateral_penalty, trailing_penalty
     
     def _dense_slalom_traffic(self):
         num_lanes = self.config["lanes_count"]
