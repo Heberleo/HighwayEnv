@@ -30,7 +30,7 @@ class ContinuousHighwayEnv(AbstractEnv):
                 },
                 "action": {
                     "type": "ContinuousAction",
-                    "steering_range": [-np.pi / 6, np.pi / 6],
+                    "steering_range": [-0.35, 0.35],
                     "acceleration_range": [-5, 5],
                     "longitudinal": True,
                     "lateral": True,
