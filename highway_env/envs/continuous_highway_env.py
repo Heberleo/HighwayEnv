@@ -277,8 +277,8 @@ class ContinuousHighwayEnv(AbstractEnv):
         width = lane.width_at(longitudinal)
         lateral_penalty = (lateral_distance / (width / 2))
 
-        if abs(angle_diff) > 0.1: # apply no lateral penalty if the vehicle is turning (> 5 degrees), so active lane changes are not penalized
-           lateral_penalty = 0.0
+        # if abs(angle_diff) > 0.1: # apply no lateral penalty if the vehicle is turning (> 5 degrees), so active lane changes are not penalized
+           # lateral_penalty = 0.0
         
         return heading_penalty, lateral_penalty
     
