@@ -117,6 +117,8 @@ class ContinuousHighwayEnv(AbstractEnv):
                 self._dense_slalom_traffic()  
             else:
                 self._slalom_traffic() 
+        elif self.config["traffic"] == "random":
+            self._random_traffic()
 
     def step(self, action: Action) -> tuple[np.ndarray, float, bool, bool, dict]:
         """
@@ -349,7 +351,7 @@ class ContinuousHighwayEnv(AbstractEnv):
         num_lanes = self.config["lanes_count"]
         lanes = self.road.network.lanes_list()
 
-        num_vehicles = 8
+        num_vehicles = 16
         ego_position = self.vehicle.position
         distance = 30
         speed = self.np_random.uniform(*self.config["others_speed_range"])  # Random speed for vehicles in the slalom traffic to create more diverse traffic patterns
@@ -373,13 +375,15 @@ class ContinuousHighwayEnv(AbstractEnv):
 
     def _random_traffic(self):
         num_vehicles = 20
+        density = 0.5
     
         for _ in range(num_vehicles):       
             speed = self.np_random.uniform(*self.config["others_speed_range"])  # Random speed for vehicles in the random traffic to create more diverse traffic patterns
             vehicle = IDMVehicle.create_random(
                 self.road, 
-                spacing=1 / self.config["vehicles_density"],
+                spacing= 1 / density,
                 speed=speed
             )
             vehicle.randomize_behavior()
+            # vehicle.enable_lane_change = False  # Vehicles in the random traffic cannot change lane to create more stable traffic patterns
             self.road.vehicles.append(vehicle)
