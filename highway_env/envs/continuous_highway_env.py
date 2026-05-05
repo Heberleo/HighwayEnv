@@ -355,7 +355,7 @@ class ContinuousHighwayEnv(AbstractEnv):
         speed = self.np_random.uniform(*self.config["others_speed_range"])  # Random speed for vehicles in the slalom traffic to create more diverse traffic patterns
         counter = 0
 
-        for i in range(num_vehicles):
+        for i in range(num_vehicles // 4):
             lane_indices = self.np_random.permutation(num_lanes)
 
             # create random permutation of lane indices for this batch of vehicles
@@ -363,18 +363,23 @@ class ContinuousHighwayEnv(AbstractEnv):
                 # spawn a vehicle in the current lane
                 lane = lanes[lane_index]
                 x = lane.position(ego_position[0], ego_position[1])[0]  # spawn behind the ego vehicle
-                x += distance + counter * distance  # space out vehicles by a certain distance
+                x += 2 * distance + counter * distance  # space out vehicles by a certain distance
                 x += self.np_random.uniform(-10, 10)
 
                 counter += 1
                 vehicle = Vehicle(self.road, lane.position(x, 0), lane.heading_at(0), speed)
                 self.road.vehicles.append(vehicle)
 
-            lane_index = self.np_random.choice(num_lanes)
-            x = lane.position(ego_position[0], ego_position[1])[0]  # spawn behind the ego vehicle
-            x += distance + counter * distance  # space out vehicles by a certain distance
-            x += self.np_random.uniform(-10, 10)
 
-            counter += 1
-            vehicle = Vehicle(self.road, lane.position(x, 0), lane.heading_at(0), speed)
+    def _random_traffic(self):
+        num_vehicles = 20
+    
+        for _ in range(num_vehicles):       
+            speed = self.np_random.uniform(*self.config["others_speed_range"])  # Random speed for vehicles in the random traffic to create more diverse traffic patterns
+            vehicle = IDMVehicle.create_random(
+                self.road, 
+                spacing=1 / self.config["vehicles_density"],
+                speed=speed
+            )
+            vehicle.randomize_behavior()
             self.road.vehicles.append(vehicle)
