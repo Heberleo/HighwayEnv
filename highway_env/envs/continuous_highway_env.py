@@ -146,6 +146,8 @@ class ContinuousHighwayEnv(AbstractEnv):
         truncated = self._is_truncated()
         info = self._info(obs, action)
         info["true_observation"] = obs
+        info["on_road"] = self.vehicle.on_road
+
         if self.render_mode == "human":
             self.render()
 
@@ -351,7 +353,7 @@ class ContinuousHighwayEnv(AbstractEnv):
         num_lanes = self.config["lanes_count"]
         lanes = self.road.network.lanes_list()
 
-        num_vehicles = 16
+        num_vehicles = 12
         ego_position = self.vehicle.position
         distance = 30
         speed = self.np_random.uniform(*self.config["others_speed_range"])  # Random speed for vehicles in the slalom traffic to create more diverse traffic patterns
