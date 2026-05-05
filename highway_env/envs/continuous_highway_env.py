@@ -363,7 +363,7 @@ class ContinuousHighwayEnv(AbstractEnv):
                 # spawn a vehicle in the current lane
                 lane = lanes[lane_index]
                 x = lane.position(ego_position[0], ego_position[1])[0]  # spawn behind the ego vehicle
-                x += 2 * distance + counter * distance  # space out vehicles by a certain distance
+                x += distance + counter * distance  # space out vehicles by a certain distance
                 x += self.np_random.uniform(-10, 10)
 
                 counter += 1
