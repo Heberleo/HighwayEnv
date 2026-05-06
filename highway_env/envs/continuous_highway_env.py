@@ -238,7 +238,7 @@ class ContinuousHighwayEnv(AbstractEnv):
         )
         low_scaled_speed = 1 - low_scaled_speed  # We want a penalty for low speeds, so we invert the scale
     
-        heading_penalty, lateral_penalty, trailing_penalty = self._lane_penalties()
+        heading_penalty, lateral_penalty, trailing_penalty, lane_sitting_reward = self._lane_penalties()
 
         speeding = utils.lmap(
             forward_speed, self.config["speeding_range"], [0, 1]
@@ -257,10 +257,11 @@ class ContinuousHighwayEnv(AbstractEnv):
             "lateral_penalty": lateral_penalty,  # Penalize being in the leftmost or rightmost lane to foster lane keeping
             "speeding_penalty": np.clip(speeding, 0, 1),  # Penalize driving above the speed limit
             "acceleration_penalty": acceleration_punished,  # Penalize high acceleration to foster smooth driving
-            "trailing_penalty": trailing_penalty  # Penalize being too close to the vehicle ahead
+            "trailing_penalty": trailing_penalty,  # Penalize being too close to the vehicle ahead
+            "lane_sitting_reward": lane_sitting_reward  # Reward for staying centered in the lane
         }
 
-    def _lane_penalties(self) -> tuple[float, float, float]:
+    def _lane_penalties(self) -> tuple[float, float, float, float]:
         # 1. Get raw angles (in radians)
         vehicle_heading = self.vehicle.heading
         
@@ -281,6 +282,9 @@ class ContinuousHighwayEnv(AbstractEnv):
         # 5. Calculate penalty for being far from the lane center (lateral deviation)
         # This encourages the vehicle to stay centered in the lane, which is important for safety and realism.
         lateral_distance = lane.distance(self.vehicle.position)
+
+        lateral_distance = lateral_distance if abs(lateral_distance) > lane.width / 4 else 0.0
+
         width = lane.width_at(longitudinal)
         lateral_penalty = (lateral_distance / (width / 2)) ** 2
 
@@ -295,8 +299,9 @@ class ContinuousHighwayEnv(AbstractEnv):
             if distance < 10 and abs(angle_diff) < 0.1: # trailing penalty unless the vehicle is turning, in which case we assume it is performing a lane change and we don't want to penalize it for being close to the front vehicle
                 trailing_penalty = (10 - distance) / 10  # Linear penalty that increases as the vehicle gets closer to the front vehicle, maxing out at a distance of 0
         
+        lane_sitting_reward = float(lateral_distance == 0.0)
         
-        return heading_penalty, lateral_penalty, trailing_penalty
+        return heading_penalty, lateral_penalty, trailing_penalty, lane_sitting_reward
     
     def _dense_slalom_traffic(self):
         num_lanes = self.config["lanes_count"]
