@@ -27,6 +27,7 @@ class ContinuousHighwayEnv(AbstractEnv):
                     "see_behind": True,
                     "relative": True,
                     "normalize": True,
+                    "vehicles_count": 5,  # Number of vehicles in each lane to observe (including the ego vehicle)
                 },
                 "action": {
                     "type": "ContinuousAction",
