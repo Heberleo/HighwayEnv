@@ -76,6 +76,8 @@ class ContinuousHighwayEnv(AbstractEnv):
         return config
     
     def _reset(self) -> None:
+        self.vehicles_behind_last_step = 0
+
         self._create_road()
         self._create_vehicles()
         
@@ -247,6 +249,8 @@ class ContinuousHighwayEnv(AbstractEnv):
         acceleration = action[0] # Acceleration action is in range [-1, 1], where -1 corresponds to max deceleration and 1 to max acceleration
         acceleration_punished = np.clip(acceleration, 0, 1) # Only penalize positive acceleration, square it to have a stronger penalty for higher accelerations
 
+        overtake_reward = self._overtook()
+
         return {
             "collision_reward": float(self.vehicle.crashed),
             "right_lane_reward": lane / max(len(neighbours) - 1, 1),
@@ -259,7 +263,8 @@ class ContinuousHighwayEnv(AbstractEnv):
             "acceleration_penalty": acceleration_punished,  # Penalize high acceleration to foster smooth driving
             "trailing_penalty": trailing_penalty,  # Penalize being too close to the vehicle ahead
             "cutting_penalty": cutting_penalty,  # Penalize cutting in front of other vehicles
-            "lane_sitting_reward": lane_sitting_reward  # Reward for staying centered in the lane
+            "lane_sitting_reward": lane_sitting_reward,  # Reward for staying centered in the lane
+            "overtake_reward": float(overtake_reward)  # Reward for overtaking another vehicle
         }
 
     def _lane_penalties(self) -> tuple[float, float, float, float, float]:
@@ -311,6 +316,25 @@ class ContinuousHighwayEnv(AbstractEnv):
         lane_sitting_reward = float(lateral_distance == 0.0)
         
         return heading_penalty, lateral_penalty, trailing_penalty, cutting_penalty, lane_sitting_reward
+    
+    def _overtook(self) -> bool:
+        vehicle = self.vehicle
+        ego_x = vehicle.position[0]
+
+        # Count how many vehicles we are currently ahead of
+        vehicles_behind = 0
+        for v in self.road.vehicles:
+            if v is not vehicle:
+                # If the traffic car's X coordinate is less than our X coordinate
+                if v.position[0] < ego_x:
+                    vehicles_behind += 1
+
+        # If we have more cars behind us than the previous step, we just passed someone!
+        if vehicles_behind > self.vehicles_behind_last_step:
+            self.vehicles_behind_last_step = vehicles_behind
+            return True
+        
+        return False
     
     def _dense_slalom_traffic(self):
         num_lanes = self.config["lanes_count"]
