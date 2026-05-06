@@ -356,9 +356,12 @@ class ContinuousHighwayEnv(AbstractEnv):
 
         num_vehicles = 12
         ego_position = self.vehicle.position
-        distance = 30
+        distance = 20
         speed = self.np_random.uniform(*self.config["others_speed_range"])  # Random speed for vehicles in the slalom traffic to create more diverse traffic patterns
         counter = 0
+
+        distance *= speed / self.config["others_speed_range"][1] * 1.5  # Scale distance based on speed to maintain consistent traffic density
+
 
         for i in range(num_vehicles // num_lanes):
             lane_indices = self.np_random.permutation(num_lanes)
