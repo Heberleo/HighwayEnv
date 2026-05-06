@@ -30,8 +30,8 @@ class ContinuousHighwayEnv(AbstractEnv):
                 },
                 "action": {
                     "type": "ContinuousAction",
-                    "steering_range": [-0.35, 0.35],
-                    "acceleration_range": [-5, 5],
+                    "steering_range": [-0.25, 0.25],
+                    "acceleration_range": [-2, 2],
                     "longitudinal": True,
                     "lateral": True,
                     "dynamical": False,
@@ -43,14 +43,14 @@ class ContinuousHighwayEnv(AbstractEnv):
                 "scaling": 7,
                 "centering_position": [0.3, 0.5],
 
-                "max_speed": 10,  # [m/s]
+                "max_speed": 15,  # [m/s]
 
                 "duration": 40,  # [s]
 
                 "ego_initial_speed": 7.0,
                 "reward_speed_range": [5, 10],
                 "penalty_speed_range": [0, 5],
-                "speeding_range": [10, 12],
+                "speeding_range": [10, 15],
 
                 # road and traffic
                 "traffic": None,
