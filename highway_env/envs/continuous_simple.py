@@ -57,7 +57,7 @@ class ContinuousSimpleEnv(AbstractEnv):
                 
                 "speed_reward": 0.5,  # Reward for driving at the target speed
                 "speed_penalty": -1.0,  # Penalty for driving too slow or too fast
-                "heading_penalty": -1.0,  # Penalty for heading deviation from lane direction
+                "heading_penalty": -0.0,  # Penalty for heading deviation from lane direction
                 "lateral_penalty": -0.5,  # Penalty for being far from the lane center
                 "off_road_penalty": -5.0,  # Penalty for being off the road 
                 "acceleration_penalty": -0.0,  # Penalty for high acceleration to foster smooth driving
