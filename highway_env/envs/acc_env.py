@@ -51,7 +51,9 @@ class AccEnv(AbstractEnv):
                 "initial_speed": 0,
 
                 "other_speed": 10,  # [m/s]
-                
+
+                "generalize": False,  # Whether to randomize the other vehicle's speed and the target distance at each reset
+                "generalize_speed_range": [10, 16],  # Range of speeds for the front vehicle when generalization is enabled
 
                 "target_distance": 10,  # [m]
                 
@@ -101,12 +103,17 @@ class AccEnv(AbstractEnv):
         self.road.vehicles.append(vehicle)
         self.vehicle = vehicle
 
+        if self.config["generalize"]:
+            speed = self.np_random.uniform(*self.config["generalize_speed_range"])
+        else:
+            speed = self.config["other_speed"]
+            
         # Create a front vehicle at the target distance
         front_vehicle = Vehicle.create_at(
             road=self.road,
             lane_id=vehicle.lane_index[2],
             x=vehicle.position + np.array([self.config["target_distance"], 0]),
-            speed=self.config["other_speed"],
+            speed=speed
         )
         front_vehicle.LENGTH = self.config["other_length"]
         self.road.vehicles.append(front_vehicle)
