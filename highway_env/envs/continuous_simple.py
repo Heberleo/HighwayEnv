@@ -23,7 +23,7 @@ class ContinuousSimpleEnv(AbstractEnv):
             {
                 "observation": {
                     "type": "Kinematics",
-                    "attributes": ["x", "y", "vx", "vy", "lat_off, long_off, ang_off", "rightness"],
+                    "attributes": ["x", "y", "vx", "vy"],
                     "see_behind": True,
                     "relative": True,
                     "normalize": True,
