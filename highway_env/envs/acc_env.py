@@ -58,7 +58,6 @@ class AccEnv(AbstractEnv):
                 "ego_length": 5,
                 "other_length": 5,
                 
-                "shape_distance_reward": True,  # Whether to shape the distance reward with a linear ramp for easier learning
                 "distance_reward": 0.5,  # Penalty for being far from the target distance to the front vehicle
                 "distance_norm": 20,  # Normalization factor for distance penalty
                 "off_road_penalty": -1.0,  # Penalty for being off the road 
@@ -187,8 +186,15 @@ class AccEnv(AbstractEnv):
 
         """
 
+        scale = self.config.get("observation_scale", 1.0)
+        offset = self.config.get("observation_offset", 0.0) # in unnormalized observation units
 
-        return observation
+        offset = lmap(offset, self.observation_type.features_range["x"], [-1, 1])
+
+        disturbed_observation = np.copy(observation)
+        disturbed_observation[1][1] = np.clip(disturbed_observation[1][1] * scale + offset, -1, 1)  # Apply disturbance to the relative x position of the front vehicle
+
+        return disturbed_observation
 
     def _reward(self, action):
         """
