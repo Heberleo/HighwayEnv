@@ -239,7 +239,7 @@ class AccEnv(AbstractEnv):
             distance_reward = 1 - (self.config["target_distance"] - distance_to_front) / self.config["target_distance"]
             distance_reward **= 2  # Quadratic penalty for distance deviation
         else:
-            distance_reward = 1 - (distance_to_front - self.config["target_distance"]) / self.config["target_distance"]
+            distance_reward = 1 - (distance_to_front - self.config["target_distance"]) / self.config["distance_norm"]
             if distance_reward > 0:
                 distance_reward **= 2  # Quadratic penalty for distance deviation
 
