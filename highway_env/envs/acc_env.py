@@ -62,8 +62,8 @@ class AccEnv(AbstractEnv):
                 
                 "distance_reward": 0.5,  # Penalty for being far from the target distance to the front vehicle
                 "distance_norm": 20,  # Normalization factor for distance penalty
-                "off_road_penalty": -1.0,  # Penalty for being off the road 
-                "collision_penalty": -1.0,  # Penalty for colliding with another vehicle
+                "off_road_penalty": -3.0,  # Penalty for being off the road 
+                "collision_penalty": -3.0,  # Penalty for colliding with another vehicle
 
 
             }
@@ -107,12 +107,14 @@ class AccEnv(AbstractEnv):
             speed = self.np_random.uniform(*self.config["generalize_speed_range"])
         else:
             speed = self.config["other_speed"]
-            
+
+        offset = self.config["target_distance"] + vehicle.LENGTH / 2 + self.config["other_length"] / 2
+
         # Create a front vehicle at the target distance
         front_vehicle = Vehicle.create_at(
             road=self.road,
             lane_id=vehicle.lane_index[2],
-            x=vehicle.position + np.array([self.config["target_distance"], 0]),
+            x=vehicle.position + np.array([offset, 0]),
             speed=speed
         )
         front_vehicle.LENGTH = self.config["other_length"]
