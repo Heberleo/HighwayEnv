@@ -58,6 +58,7 @@ class AccEnv(AbstractEnv):
                 "ego_length": 5,
                 "other_length": 5,
                 
+                "shape_distance_reward": True,  # Whether to shape the distance reward with a linear ramp for easier learning
                 "distance_reward": 0.5,  # Penalty for being far from the target distance to the front vehicle
                 "distance_norm": 20,  # Normalization factor for distance penalty
                 "off_road_penalty": -1.0,  # Penalty for being off the road 
@@ -223,12 +224,14 @@ class AccEnv(AbstractEnv):
             distance_reward = 1 - (self.config["target_distance"] - distance_to_front) / self.config["target_distance"]
             distance_reward **= 2  # Quadratic penalty for distance deviation
         else:
-            distance_reward = 1 - (distance_to_front - self.config["target_distance"]) / self.config["distance_norm"]
+            distance_reward = 1 - (distance_to_front - self.config["target_distance"]) / self.config["target_distance"]
+            if distance_reward > 0:
+                distance_reward **= 2  # Quadratic penalty for distance deviation
 
         return {
             "collision_penalty": float(self.vehicle.crashed),
             "off_road_penalty": float(not self.vehicle.on_road),
-            "distance_reward": distance_reward
+            "distance_reward": distance_reward,
         }
 
    
