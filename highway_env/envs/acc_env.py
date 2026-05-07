@@ -53,7 +53,7 @@ class AccEnv(AbstractEnv):
                 "other_speed": 10,  # [m/s]
 
                 "generalize": False,  # Whether to randomize the other vehicle's speed and the target distance at each reset
-                "generalize_speed_range": [10, 16],  # Range of speeds for the front vehicle when generalization is enabled
+                "generalize_speed_range": [6.0, 12.0],  # Range of speeds for the front vehicle when generalization is enabled
 
                 "target_distance": 10,  # [m]
                 
