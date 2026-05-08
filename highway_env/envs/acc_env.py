@@ -84,11 +84,15 @@ class AccEnv(AbstractEnv):
 
     def _create_vehicles(self):
         """Create vehicles as specified in the configuration."""
+        # if initial speed is list, sample a speed for the ego vehicle from the range, otherwise use the fixed initial speed
+        inital_speed = self.config["initial_speed"]
+        if isinstance(inital_speed, list):
+            inital_speed = self.np_random.uniform(*inital_speed)
 
         vehicle = Vehicle.create_random(
             self.road,
             lane_id=None,
-            speed=self.config["initial_speed"],
+            speed=inital_speed,
         )
 
         vehicle = self.action_type.vehicle_class(
@@ -109,6 +113,9 @@ class AccEnv(AbstractEnv):
             speed = self.config["other_speed"]
 
         offset = self.config["target_distance"] + vehicle.LENGTH / 2 + self.config["other_length"] / 2
+        
+        distance_noise = self.config.get("distance_noise", 0.0)
+        offset += self.np_random.uniform(-distance_noise, distance_noise)
 
         # Create a front vehicle at the target distance
         front_vehicle = Vehicle.create_at(
