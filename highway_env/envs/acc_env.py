@@ -115,7 +115,7 @@ class AccEnv(AbstractEnv):
         offset = self.config["target_distance"] + vehicle.LENGTH / 2 + self.config["other_length"] / 2
         
         distance_noise = self.config.get("distance_noise", 0.0)
-        offset += self.np_random.uniform(-distance_noise, distance_noise)
+        offset += self.np_random.uniform(0, distance_noise)
 
         # Create a front vehicle at the target distance
         front_vehicle = Vehicle.create_at(
