@@ -49,7 +49,7 @@ class AccEnv(AbstractEnv):
                 "duration": 40,  # [s]
 
                 "initial_speed": [0.0, 2.0],  # [m/s] Initial speed of the ego vehicle, can be a fixed value or a range to sample from
-                "distance_noise": 2.0,  # [m] Noise to add to the target distance
+                "distance_noise": 1.0,  # [m] Noise to add to the target distance
 
                 "other_speed": 10,  # [m/s]
 
