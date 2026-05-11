@@ -31,7 +31,7 @@ class AccEnv(AbstractEnv):
                 },
                 "action": {
                     "type": "ContinuousAction",
-                    "steering_range": [-0.35, 0.35],
+                    "steering_range": [-0.25, 0.25],
                     "acceleration_range": [-5, 5],
                     "longitudinal": True,
                     "lateral": True,
