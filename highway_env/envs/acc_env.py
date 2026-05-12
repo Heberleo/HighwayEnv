@@ -34,7 +34,7 @@ class AccEnv(AbstractEnv):
                     "steering_range": [-0.25, 0.25],
                     "acceleration_range": [-5, 5],
                     "longitudinal": True,
-                    "lateral": True,
+                    "lateral": False,
                     "dynamical": False,
                 },
                 "simulation_frequency": 10,
@@ -73,8 +73,7 @@ class AccEnv(AbstractEnv):
     
     def _reset(self) -> None:
         self._create_road()
-        self._create_vehicles()
-        
+        self._create_vehicles()        
     
     def _create_road(self):
         """Create a road composed of straight adjacent lanes."""
@@ -152,9 +151,13 @@ class AccEnv(AbstractEnv):
         reward = self._reward(action)
         terminated = self._is_terminated()
         truncated = self._is_truncated()
+
         info = self._info(obs, action)
         info["true_observation"] = obs
         info["on_road"] = self.vehicle.on_road
+        vehicle_ahead, _ = self.road.neighbour_vehicles(self.vehicle, lane_index=self.vehicle.lane_index)
+        info["distance"] = vehicle_ahead.position[0] - self.vehicle.position[0] - self.vehicle.LENGTH / 2 - vehicle_ahead.LENGTH / 2 if vehicle_ahead else 20
+        info["speed"] = self.vehicle.speed
 
         if self.render_mode == "human":
             self.render()
@@ -182,34 +185,29 @@ class AccEnv(AbstractEnv):
         # map offsets to [-1, 1] range, so that they can be added to the action which is in this range
         steering_offset = lmap(steering_offset, self.action_type.steering_range, [-1, 1])
         acceleration_offset = lmap(acceleration_offset, self.action_type.acceleration_range, [-1, 1]) - lmap(0., self.action_type.acceleration_range, [-1, 1]) # accomodate for asymmetric acceleration range
-
-        disturbed_steering = np.clip(action[1] * steering_factor + steering_offset, -1, 1)
+        
         disturbed_acceleration = np.clip(action[0] * acceleration_factor + acceleration_offset, -1, 1)
 
-        action = np.array([disturbed_acceleration, disturbed_steering])
+        if self.action_type.lateral:
+            disturbed_steering = np.clip(action[1] * steering_factor + steering_offset, -1, 1)
+            action = np.array([disturbed_acceleration, disturbed_steering])
+        else:
+            action = np.array([disturbed_acceleration])
+        
 
         return action
     
     def _disturb_observation(self, observation: np.ndarray) -> np.ndarray:
 
-        """
-        Observation Disturbances:
-
-        - scale: The observed values can be scaled to simulate sensor calibration issues.
-
-        - offset: A constant offset can be added to the observed values to simulate sensor bias.
-
-        - distortion: The observed values can be distorted using a non-linear function to simulate sensor distortion.
-
-        """
-
-        scale = self.config.get("observation_scale", 1.0)
-        offset = self.config.get("observation_offset", 0.0) # in unnormalized observation units
-
+        speed_offset = self.config.get("obs_vx_offset", 0.0) # in unnormalized observation units
+        speed_offset = lmap(speed_offset, self.observation_type.features_range["vx"], [-1, 1]) 
+        
+        offset = self.config.get("obs_x_offset", 0.0) # in unnormalized observation units
         offset = lmap(offset, self.observation_type.features_range["x"], [-1, 1])
 
         disturbed_observation = np.copy(observation)
-        disturbed_observation[1][1] = np.clip(disturbed_observation[1][1] * scale + offset, -1, 1)  # Apply disturbance to the relative x position of the front vehicle
+        disturbed_observation[1][1] = np.clip(disturbed_observation[1][1] + offset, -1, 1)  # Apply disturbance to the relative x position of the front vehicle
+        disturbed_observation[1][3] = np.clip(disturbed_observation[1][3]+ speed_offset, -1, 1)  # Apply disturbance to the relative speed of the front vehicle
 
         return disturbed_observation
 
