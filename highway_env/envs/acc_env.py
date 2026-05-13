@@ -23,7 +23,7 @@ class AccEnv(AbstractEnv):
             {
                 "observation": {
                     "type": "Kinematics",
-                    "attributes": ["x", "y", "vx", "vy"],
+                    "attributes": ["x", "vx"],
                     "see_behind": True,
                     "relative": True,
                     "normalize": True,
