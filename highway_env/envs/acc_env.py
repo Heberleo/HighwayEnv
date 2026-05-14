@@ -146,23 +146,22 @@ class AccEnv(AbstractEnv):
         self._simulate(action)
         
         obs = self.observation_type.observe()
-        obs = self._disturb_observation(obs)
+        disturbed_obs = self._disturb_observation(obs)
 
         reward = self._reward(action)
         terminated = self._is_terminated()
         truncated = self._is_truncated()
 
         info = self._info(obs, action)
-        info["true_observation"] = obs
         info["on_road"] = self.vehicle.on_road
         vehicle_ahead, _ = self.road.neighbour_vehicles(self.vehicle, lane_index=self.vehicle.lane_index)
         info["distance"] = vehicle_ahead.position[0] - self.vehicle.position[0] - self.vehicle.LENGTH / 2 - vehicle_ahead.LENGTH / 2 if vehicle_ahead else 20
-        info["speed"] = self.vehicle.speed
+        info["relative_speed"] = self.vehicle.speed - vehicle_ahead.speed if vehicle_ahead else 0
 
         if self.render_mode == "human":
             self.render()
 
-        return obs, reward, terminated, truncated, info
+        return disturbed_obs, reward, terminated, truncated, info
     
     def _disturb_action(self, action: Action) -> Action:
 
