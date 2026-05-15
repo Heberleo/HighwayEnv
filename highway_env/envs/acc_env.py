@@ -166,6 +166,7 @@ class AccEnv(AbstractEnv):
         vehicle_ahead, _ = self.road.neighbour_vehicles(self.vehicle, lane_index=self.vehicle.lane_index)
         info["distance"] = vehicle_ahead.position[0] - self.vehicle.position[0] - self.vehicle.LENGTH / 2 - vehicle_ahead.LENGTH / 2 if vehicle_ahead else 20
         info["relative_speed"] = self.vehicle.speed - vehicle_ahead.speed if vehicle_ahead else 0
+        info["other_speed"] = vehicle_ahead.speed if vehicle_ahead else 0
 
         return info
     
