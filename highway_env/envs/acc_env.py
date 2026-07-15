@@ -13,6 +13,11 @@ from highway_env.utils import lmap, near_split
 from highway_env.vehicle.behavior import IDMVehicle
 from highway_env.vehicle.kinematics import Vehicle
 
+MAX_SPEED = 30  # [m/s]
+X_RANGE = [-5.0 * MAX_SPEED, 5.0 * MAX_SPEED]  # [m] Range of relative x positions to consider in the observation
+VX_RANGE = [-2.0 * MAX_SPEED, 2.0 * MAX_SPEED]  # [m/s] Range of relative speeds to consider in the observation
+ACCCELERATION_RANGE = [-5, 5]  # [m/s^2] Range of acceleration actions
+
 class AccEnv(AbstractEnv):
     """A highway environment with continuous action space."""
         
@@ -32,10 +37,11 @@ class AccEnv(AbstractEnv):
                 "action": {
                     "type": "ContinuousAction",
                     "steering_range": [-0.25, 0.25],
-                    "acceleration_range": [-5, 5],
+                    "acceleration_range": ACCCELERATION_RANGE,
                     "longitudinal": True,
                     "lateral": False,
                     "dynamical": False,
+                    "clip": False,
                 },
                 "simulation_frequency": 10,
                 "policy_frequency": 1,
@@ -44,7 +50,7 @@ class AccEnv(AbstractEnv):
                 "scaling": 7,
                 "centering_position": [0.3, 0.5],
 
-                "max_speed": 30,  # [m/s]
+                "max_speed": MAX_SPEED,  # [m/s]
 
                 "duration": 40,  # [s]
 
@@ -65,6 +71,7 @@ class AccEnv(AbstractEnv):
                 "distance_norm": 20,  # Normalization factor for distance penalty
                 "off_road_penalty": -3.0,  # Penalty for being off the road 
                 "collision_penalty": -3.0,  # Penalty for colliding with another vehicle
+                "far_away_penalty": True,  # Penalty for being far away from the front vehicle
 
 
             }
@@ -183,33 +190,22 @@ class AccEnv(AbstractEnv):
         responsive to control inputs.
 
         """
-        steering_offset = self.config.get("steering_offset", 0.0)
         acceleration_offset = self.config.get("acceleration_offset", 0.0)
-        steering_factor = self.config.get("steering_factor", 1.0)
         acceleration_factor = self.config.get("acceleration_factor", 1.0)
 
-        # map offsets to [-1, 1] range, so that they can be added to the action which is in this range
-        steering_offset = lmap(steering_offset, self.action_type.steering_range, [-1, 1])
-        acceleration_offset = lmap(acceleration_offset, self.action_type.acceleration_range, [-1, 1]) - lmap(0., self.action_type.acceleration_range, [-1, 1]) # accomodate for asymmetric acceleration range
-        
-        disturbed_acceleration = np.clip(action[0] * acceleration_factor + acceleration_offset, -1, 1)
+        acceleration_offset = self.scale_acceleration_action(acceleration_offset) - self.scale_acceleration_action(0.) # accomodate for asymmetric acceleration range
 
-        if self.action_type.lateral:
-            disturbed_steering = np.clip(action[1] * steering_factor + steering_offset, -1, 1)
-            action = np.array([disturbed_acceleration, disturbed_steering])
-        else:
-            action = np.array([disturbed_acceleration])
-        
+        disturbed_acceleration = action[0] * acceleration_factor + acceleration_offset
 
-        return action
+        return np.array([disturbed_acceleration])
     
     def _disturb_observation(self, observation: np.ndarray) -> np.ndarray:
 
         speed_offset = self.config.get("obs_vx_offset", 0.0) # in unnormalized observation units
-        speed_offset = lmap(speed_offset, self.observation_type.features_range["vx"], [-1, 1]) 
+        speed_offset = self.scale_vx_observation(speed_offset)
         
         offset = self.config.get("obs_x_offset", 0.0) # in unnormalized observation units
-        offset = lmap(offset, self.observation_type.features_range["x"], [-1, 1])
+        offset = self.scale_x_observation(offset)
 
         disturbed_observation = np.copy(observation)
         disturbed_observation[1][1] = np.clip(disturbed_observation[1][1] + offset, -1, 1)  # Apply disturbance to the relative x position of the front vehicle
@@ -254,6 +250,10 @@ class AccEnv(AbstractEnv):
             distance_reward = 1 - (distance_to_front - self.config["target_distance"]) / self.config["distance_norm"]
             if distance_reward > 0:
                 distance_reward **= 2  # Quadratic penalty for distance deviation
+            elif self.config["far_away_penalty"]:
+                distance_reward = distance_reward  # Linear penalty for being far away, only if enabled in the config
+            else:
+                distance_reward = 0  # No penalty for being far away if far_away_penalty is disabled
 
         return {
             "collision_penalty": float(self.vehicle.crashed),
@@ -261,4 +261,27 @@ class AccEnv(AbstractEnv):
             "distance_reward": distance_reward,
         }
 
-   
+    @classmethod
+    def scale_x_observation(cls, obs: np.float) -> np.float:
+        return lmap(obs, X_RANGE, [-1, 1])
+    
+    @classmethod
+    def scale_vx_observation(cls, obs: np.float) -> np.float:
+        return lmap(obs, VX_RANGE, [-1, 1])
+    
+    @classmethod
+    def unscale_x_observation(cls, obs: np.float) -> np.float:
+        return lmap(obs, [-1, 1], X_RANGE)
+    
+    @classmethod
+    def unscale_vx_observation(cls, obs: np.float) -> np.float:
+        return lmap(obs, [-1, 1], VX_RANGE)
+    
+    @classmethod
+    def scale_acceleration_action(cls, action: np.float) -> np.float:
+        return lmap(action, ACCCELERATION_RANGE, [-1, 1])
+    
+    @classmethod
+    def unscale_acceleration_action(cls, action: np.float) -> np.float:
+        return lmap(action, [-1, 1], ACCCELERATION_RANGE)
+    
